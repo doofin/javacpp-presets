@@ -22,21 +22,23 @@
 
 package org.bytedeco.libtorch.presets;
 
-import org.bytedeco.javacpp.annotation.*;
-import org.bytedeco.javacpp.presets.javacpp;
-import org.bytedeco.javacpp.tools.*;
-import org.bytedeco.javacpp.FunctionPointer;
 import org.bytedeco.javacpp.Loader;
-import org.bytedeco.javacpp.Pointer;
+import org.bytedeco.javacpp.annotation.Platform;
+import org.bytedeco.javacpp.annotation.Properties;
+import org.bytedeco.javacpp.presets.javacpp;
+import org.bytedeco.javacpp.tools.InfoMap;
+import org.bytedeco.javacpp.tools.InfoMapper;
 
-@Properties(inherit = javacpp.class, target = "org.bytedeco.libtorch", global = "org.bytedeco.libtorch.global.libtorch", value = {@Platform(
-    value = {"linux", "macosx", "windows"},
-    //define = {},
-    compiler = "cpp14",
-    include = {
-        "LibTorch/LibTorch.h"
-    },
-    link = {"libtorch"}),
+@Properties(inherit = javacpp.class, target = "org.bytedeco.libtorch", global = "org.bytedeco.libtorch.global.libtorch", value = {
+        @Platform(
+                value = {"linux", "macosx", "windows"},
+                //define = {},
+                compiler = "cpp14",
+                include = "torch/script.h",
+                link = {"torch"},
+                resource = {"include", "lib"}
+        )
+})
 public class libtorch implements InfoMapper {
     static { Loader.checkVersion("org.bytedeco", "libtorch"); }
 

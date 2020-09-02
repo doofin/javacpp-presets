@@ -34,7 +34,7 @@
         <artifactId>javacpp</artifactId>
         <configuration>
           <compilerOptions>
-            <compilerOption>-std=c++11</compilerOption>
+            <compilerOption>-std=c++14</compilerOption>
             <compilerOption>-fpermissive</compilerOption>
           </compilerOptions>
         </configuration>
