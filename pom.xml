@@ -587,6 +587,7 @@
         <module>libfreenect2</module>
         <module>librealsense</module>
         <module>librealsense2</module>
+        <module>libtorch</module>
         <module>videoinput</module>
         <module>artoolkitplus</module>
         <module>chilitags</module>
