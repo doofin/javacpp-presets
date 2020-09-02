@@ -2,10 +2,1543 @@
 
 package org.bytedeco.libtorch.global;
 
+import org.bytedeco.javacpp.BytePointer;
 import org.bytedeco.javacpp.Loader;
+import org.bytedeco.javacpp.LongPointer;
+import org.bytedeco.javacpp.Pointer;
+import org.bytedeco.javacpp.annotation.*;
+import org.bytedeco.libtorch.*;
 
 public class libtorch extends org.bytedeco.libtorch.presets.libtorch {
     static { Loader.load(); }
+
+// Targeting ../QEngineVector.java
+
+
+// Parsed from c10/core/DeviceType.h
+
+// #pragma once
+
+// This is directly synchronized with caffe2/proto/caffe2.proto, but
+// doesn't require me to figure out how to get Protobuf headers into
+// ATen/core (which would require a lot more build system hacking.)
+// If you modify me, keep me synchronized with that file.
+
+// #include <c10/macros/Macros.h>
+
+// #include <ostream>
+// #include <functional>
+
+/** enum class c10::DeviceType */
+public static final short
+  CPU = (short)0,
+  CUDA = (short)1, // CUDA.
+  MKLDNN = (short)2, // Reserved for explicit MKLDNN
+  OPENGL = (short)3, // OpenGL
+  OPENCL = (short)4, // OpenCL
+  IDEEP = (short)5, // IDEEP.
+  HIP = (short)6, // AMD HIP
+  FPGA = (short)7, // FPGA
+  MSNPU = (short)8, // MSNPU
+  XLA = (short)9, // XLA / TPU
+  Vulkan = (short)10, // Vulkan
+  // NB: If you add more devices:
+  //  - Change the implementations of DeviceTypeName and isValidDeviceType
+  //    in DeviceType.cpp
+  //  - Change the number below
+  COMPILE_TIME_MAX_DEVICE_TYPES = (short)11,
+  ONLY_FOR_TEST = (short)20901; // This device type is only for test.
+
+@Namespace("c10") @MemberGetter public static native @Cast("const c10::DeviceType") short kCPU();
+@Namespace("c10") @MemberGetter public static native @Cast("const c10::DeviceType") short kCUDA();
+@Namespace("c10") @MemberGetter public static native @Cast("const c10::DeviceType") short kHIP();
+@Namespace("c10") @MemberGetter public static native @Cast("const c10::DeviceType") short kFPGA();
+@Namespace("c10") @MemberGetter public static native @Cast("const c10::DeviceType") short kMSNPU();
+@Namespace("c10") @MemberGetter public static native @Cast("const c10::DeviceType") short kXLA();
+@Namespace("c10") @MemberGetter public static native @Cast("const c10::DeviceType") short kVulkan();
+
+// define explicit int constant
+@Namespace("c10") @MemberGetter public static native int COMPILE_TIME_MAX_DEVICE_TYPES();
+
+@Namespace("c10") public static native @Cast("std::ostream*") @ByRef @Name("operator <<") Pointer shiftLeft(@Cast("std::ostream*") @ByRef Pointer stream, @Cast("c10::DeviceType") short type);
+
+
+// Targeting ../DeviceTypeMap.java
+
+
+ // namespace std
+
+
+
+// Parsed from c10/core/Device.h
+
+// #pragma once
+
+// #include <c10/core/DeviceType.h>
+// #include <c10/macros/Macros.h>
+// #include <c10/util/Exception.h>
+
+// #include <cstddef>
+// #include <functional>
+// #include <iosfwd>
+// #include <string>
+
+/** An index representing a specific device; e.g., the 1 in GPU 1.
+ *  A DeviceIndex is not independently meaningful without knowing
+ *  the DeviceType it is associated; try to use Device rather than
+ *  DeviceIndex directly. */
+// Targeting ../Device.java
+
+
+
+@Namespace("c10") public static native @Cast("std::ostream*") @ByRef @Name("operator <<") Pointer shiftLeft(
+    @Cast("std::ostream*") @ByRef Pointer stream,
+    @Const @ByRef Device device);
+
+
+// Targeting ../DeviceMap.java
+
+
+ // namespace std
+
+
+// Parsed from c10/core/Allocator.h
+
+// #pragma once
+
+// #include <stddef.h>
+// #include <memory>
+
+// #include <c10/core/Device.h>
+// #include <c10/util/Exception.h>
+// #include <c10/util/ThreadLocalDebugInfo.h>
+// #include <c10/util/UniqueVoidPtr.h>
+
+// A DataPtr is a unique pointer (with an attached deleter and some
+// context for the deleter) to some memory, which also records what
+// device is for its data.
+//
+// nullptr DataPtrs can still have a nontrivial device; this allows
+// us to treat zero-size allocations uniformly with non-zero allocations.
+//
+
+// NB: Device is NOT tested for here; a CUDA nullptr is as much a nullptr as a
+// CPU nullptr
+
+// Note [raw_allocate/raw_deallocate and Thrust]
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Thrust's support for custom allocators requires us to write something
+// like this:
+//
+//  class ThrustAllocator {
+//    char* allocate(size_t);
+//    void deallocate(char*, size_t);
+//  };
+//
+// This is not good for our unique_ptr based allocator interface, as
+// there is no way to get to the context when we free.
+//
+// However, in some cases the context is exactly the same as
+// the data pointer.  In this case, we can support the "raw"
+// allocate and deallocate interface.  This is what
+// raw_deleter signifies.  By default, it returns a nullptr, which means that
+// the raw interface is not implemented.  Be sure to implement it whenever
+// possible, or the raw interface will incorrectly reported as unsupported,
+// when it is actually possible.
+
+// This context is used to generate DataPtr which have arbitrary
+// std::function deleters associated with them.  In some user facing
+// functions, we give a (user-friendly) interface for constructing
+// tensors from external data which take an arbitrary std::function
+// deleter.  Grep for InefficientStdFunctionContext to find these
+// occurrences.
+//
+// This context is inefficient because we have to do a dynamic
+// allocation InefficientStdFunctionContext, on top of the dynamic
+// allocation which is implied by std::function itself.
+
+/** Set the allocator for DeviceType {@code t}. The passed in allocator pointer is
+ *  expected to have static lifetime; this function does NOT take ownership
+ *  of the raw pointer. (The reason for this is to prevent existing pointers
+ *  to an allocator of a particular device from being invalidated when
+ *  SetAllocator is called.)
+ *
+ *  Also note that this is not thread-safe, and we assume this function will
+ *  only be called during initialization.
+ *
+ *  The 'priority' flag is introduced when we want to overwrite the default
+ *  allocator, since the allocators are set statically. The default priority
+ *  is 0, which means the lowest. Only higher or equal priority can overwrite
+ *  existing ones.
+ */
+
+// #define REGISTER_ALLOCATOR(t, f)
+//   namespace {
+//   static AllocatorRegisterer<t> g_allocator_d(f);
+//   }
+// Targeting ../MemoryReportingInfoBase.java
+
+
+
+ // namespace c10
+
+
+// Parsed from c10/core/QEngine.h
+
+// #pragma once
+
+// #include <c10/core/DeviceType.h>
+// #include <c10/core/DispatchKey.h>
+// #include <c10/util/Exception.h>
+
+/**
+ * QEngine is an enum that is used to select the engine to run quantized ops.
+ * Keep this enum in sync with get_qengine_id() in
+ * torch/backends/quantized/__init__.py
+ */
+@Namespace("c10") public enum QEngine {
+  NoQEngine((byte)0),
+  FBGEMM((byte)1),
+  QNNPACK((byte)2);
+
+    public final byte value;
+    private QEngine(byte v) { this.value = v; }
+    private QEngine(QEngine e) { this.value = e.value; }
+    public QEngine intern() { for (QEngine e : values()) if (e.value == value) return e; return this; }
+    @Override public String toString() { return intern().name(); }
+}
+
+
+
+
+
+@Namespace("c10") public static native @StdString BytePointer toString(QEngine qengine);
+
+ // namespace c10
+
+
+// Parsed from c10/core/Backend.h
+
+// #pragma once
+
+// #include <c10/core/DeviceType.h>
+// #include <c10/core/DispatchKey.h>
+// #include <c10/util/Exception.h>
+
+// #include <stdexcept>
+
+/**
+ * This legacy enum class defines the set of backends supported by old school,
+ * code generated Type-based ATen.  A "backend" in this sense roughly
+ * corresponds to the cartesian product of (device type, layout), but restricted
+ * only to combinations which we actually have kernels for.  Backend does NOT
+ * include dtype.
+ *
+ * The reason we are sunsetting this enum class is because it doesn't allow for
+ * open registration; e.g., if you want to add SparseXLA, you'd have to
+ * edit this enum; you wouldn't be able to do it out of tree.  DispatchKey is
+ * the replacement for Backend which supports open registration.
+ *
+ * NB: The concept of 'Backend' here disagrees with the notion of backend
+ * exposed to users in torch.backends.  Backend here is something like "CPU"
+ * or "SparseCUDA"; backend in torch.backends is something like "MKL" or
+ * "CUDNN".
+ */
+@Namespace("c10") public enum Backend {
+  CPU(0),
+  CUDA(1),
+  HIP(2),
+  FPGA(3),
+  SparseCPU(4),
+  SparseCUDA(5),
+  SparseHIP(6),
+  MSNPU(7),
+  XLA(8),
+  Vulkan(9),
+  QuantizedCPU(10),
+  QuantizedCUDA(11),
+  Undefined(12),
+  MkldnnCPU(13),
+  NumOptions(14);
+
+    public final int value;
+    private Backend(int v) { this.value = v; }
+    private Backend(Backend e) { this.value = e.value; }
+    public Backend intern() { for (Backend e : values()) if (e.value == value) return e; return this; }
+    @Override public String toString() { return intern().name(); }
+}
+
+@Namespace("c10") public static native Backend toSparse(Backend b);
+
+@Namespace("c10") public static native Backend toDense(Backend b);
+
+@Namespace("c10") public static native @Cast("c10::DeviceType") short backendToDeviceType(Backend b);
+
+@Namespace("c10") public static native Backend backendToCPU(Backend b);
+
+@Namespace("c10") public static native Backend backendToCUDA(Backend b);
+
+@Namespace("c10") public static native Backend backendToHIP(Backend b);
+
+// TODO: This probably shouldn't actually be static inline
+@Namespace("c10") public static native @Cast("const char*") BytePointer toString(Backend b);
+
+@Namespace("c10") public static native @Cast("bool") boolean isSparse(Backend b);
+
+ // namespace c10
+
+
+// Parsed from c10/core/ScalarType.h
+
+// #pragma once
+
+// #include <c10/util/ArrayRef.h>
+// #include <c10/util/complex_type.h>
+// #include <c10/util/Half.h>
+// #include <c10/util/BFloat16.h>
+// #include <c10/util/Optional.h>
+// #include <c10/util/typeid.h>
+// #include <c10/util/complex_type.h>
+
+// #include <complex>
+// #include <cstdint>
+// #include <iostream>
+
+// For the macros below:
+// NB: If you want to macro some code for all non-QInt scalar types (i.e. types
+// with complete information, you probably want one of the
+// AT_FORALL_SCALAR_TYPES / AT_FORALL_SCALAR_TYPES_AND
+// macros below, which are designed to behave similarly to the Dispatch macros
+// with the same name.
+
+// NB: Order matters for this macro; it is relied upon in
+// _promoteTypesLookup and the serialization format.
+// #define AT_FORALL_SCALAR_TYPES_WITH_COMPLEX_AND_QINTS(_)
+//   _(uint8_t, Byte) /* 0 */
+//   _(int8_t, Char) /* 1 */
+//   _(int16_t, Short) /* 2 */
+//   _(int, Int) /* 3 */
+//   _(int64_t, Long) /* 4 */
+//   _(at::Half, Half) /* 5 */
+//   _(float, Float) /* 6 */
+//   _(double, Double) /* 7 */
+//   _(c10::complex<c10::Half>, ComplexHalf) /* 8 */
+//   _(c10::complex<float>, ComplexFloat) /* 9 */
+//   _(c10::complex<double>, ComplexDouble) /* 10 */
+//   _(bool, Bool) /* 11 */
+//   _(c10::qint8, QInt8) /* 12 */
+//   _(c10::quint8, QUInt8) /* 13 */
+//   _(c10::qint32, QInt32) /* 14 */
+//   _(at::BFloat16, BFloat16) /* 15 */
+
+
+// If you want to support ComplexHalf for real, add ComplexHalf
+// into this macro (and change the name).  But beware: convert()
+// doesn't work for all the conversions you need...
+// #define AT_FORALL_SCALAR_TYPES_WITH_COMPLEX_EXCEPT_COMPLEX_HALF(_)
+//   _(uint8_t, Byte)
+//   _(int8_t, Char)
+//   _(int16_t, Short)
+//   _(int, Int)
+//   _(int64_t, Long)
+//   _(at::Half, Half)
+//   _(float, Float)
+//   _(double, Double)
+//   _(c10::complex<float>, ComplexFloat)
+//   _(c10::complex<double>, ComplexDouble)
+//   _(bool, Bool)
+//   _(at::BFloat16, BFloat16)
+
+
+@Namespace("c10") public enum ScalarType {
+  Byte((byte)0), /* 0 */
+  Char((byte)1), /* 1 */
+  Short((byte)2), /* 2 */
+  Int((byte)3), /* 3 */
+  Long((byte)4), /* 4 */
+  Half((byte)5), /* 5 */
+  Float((byte)6), /* 6 */
+  Double((byte)7), /* 7 */
+  ComplexHalf((byte)8), /* 8 */
+  ComplexFloat((byte)9), /* 9 */
+  ComplexDouble((byte)10), /* 10 */
+  Bool((byte)11), /* 11 */
+  QInt8((byte)12), /* 12 */
+  QUInt8((byte)13), /* 13 */
+  QInt32((byte)14), /* 14 */
+  BFloat16((byte)15),
+      Undefined((byte)16),
+  NumOptions((byte)17);
+
+    public final byte value;
+    private ScalarType(byte v) { this.value = v; }
+    private ScalarType(ScalarType e) { this.value = e.value; }
+    public ScalarType intern() { for (ScalarType e : values()) if (e.value == value) return e; return this; }
+    @Override public String toString() { return intern().name(); }
+}
+
+// These are used to map ScalarTypes to C++ types.
+
+// #define SPECIALIZE_ScalarTypeToCPPType(cpp_type, scalar_type)
+// template<>
+// struct ScalarTypeToCPPType<c10::ScalarType::scalar_type> {
+//   using type = cpp_type;
+// 
+//   /* This is a workaround for the CUDA bug which prevents */
+//   /* ::detail::ScalarTypeToCType<T>::type being used directly due to */
+//   /* ambiguous reference which can't to be resolved. For some reason it */
+//   /* cant pick between at::detail and at::cuda::detail. */
+//   /* For repro example, please see: */
+//   /* https://gist.github.com/izdeby/952ae7cf256ddb740a73776d39a7e7ba */
+//   /* TODO: remove once the bug is fixed. */
+//   static type t;
+// };
+// Targeting ../ScalarTypeToCPPType.java
+
+ /* 0 */ /* 1 */ /* 2 */ /* 3 */ /* 4 */ /* 5 */ /* 6 */ /* 7 */ /* 8 */ /* 9 */ /* 10 */ /* 11 */ /* 12 */ /* 13 */ /* 14 */ /* 15 */
+
+// #undef SPECIALIZE_ScalarTypeToCPPType
+
+
+
+// #define AT_FORALL_SCALAR_TYPES(_)
+//   _(uint8_t, Byte)
+//   _(int8_t, Char)
+//   _(int16_t, Short)
+//   _(int, Int)
+//   _(int64_t, Long)
+//   _(float, Float)
+//   _(double, Double)
+
+// #define AT_FORALL_SCALAR_TYPES_AND(SCALARTYPE, _)
+//   _(uint8_t, Byte)
+//   _(int8_t, Char)
+//   _(int16_t, Short)
+//   _(int, Int)
+//   _(int64_t, Long)
+//   _(float, Float)
+//   _(double, Double)
+//   _(decltype(::c10::impl::ScalarTypeToCPPType<::c10::ScalarType::SCALARTYPE>::t), SCALARTYPE)
+
+// #define AT_FORALL_SCALAR_TYPES_AND2(SCALARTYPE1, SCALARTYPE2, _)
+//   _(uint8_t, Byte)
+//   _(int8_t, Char)
+//   _(int16_t, Short)
+//   _(int, Int)
+//   _(int64_t, Long)
+//   _(float, Float)
+//   _(double, Double)
+//   _(decltype(::c10::impl::ScalarTypeToCPPType<::c10::ScalarType::SCALARTYPE1>::t), SCALARTYPE1)
+//   _(decltype(::c10::impl::ScalarTypeToCPPType<::c10::ScalarType::SCALARTYPE2>::t), SCALARTYPE2)
+
+// #define AT_FORALL_SCALAR_TYPES_AND3(SCALARTYPE1, SCALARTYPE2, SCALARTYPE3, _)
+//   _(uint8_t, Byte)
+//   _(int8_t, Char)
+//   _(int16_t, Short)
+//   _(int, Int)
+//   _(int64_t, Long)
+//   _(float, Float)
+//   _(double, Double)
+//   _(decltype(::c10::impl::ScalarTypeToCPPType<::c10::ScalarType::SCALARTYPE1>::t), SCALARTYPE1)
+//   _(decltype(::c10::impl::ScalarTypeToCPPType<::c10::ScalarType::SCALARTYPE2>::t), SCALARTYPE2)
+//   _(decltype(::c10::impl::ScalarTypeToCPPType<::c10::ScalarType::SCALARTYPE3>::t), SCALARTYPE3)
+
+// #define AT_FORALL_QINT_TYPES(_)
+//   _(c10::qint8, QInt8)
+//   _(c10::quint8, QUInt8)
+//   _(c10::qint32, QInt32)
+
+// #define AT_FORALL_COMPLEX_TYPES(_)
+//   _(c10::complex<float>, ComplexFloat)
+//   _(c10::complex<double>, ComplexDouble)
+
+@Namespace("c10") public static native @ByVal TypeMeta scalarTypeToTypeMeta(ScalarType scalar_type);
+
+@Namespace("c10") public static native @ByVal @Cast("c10::optional<c10::ScalarType>*") Pointer tryTypeMetaToScalarType(
+    @ByVal TypeMeta dtype);
+
+@Namespace("c10") public static native ScalarType typeMetaToScalarType(@ByVal TypeMeta dtype);
+
+@Namespace("c10") public static native @Cast("bool") @Name("operator ==") boolean equals(ScalarType t, @ByVal TypeMeta m);
+
+@Namespace("c10") public static native @Cast("bool") @Name("operator ==") boolean equals(@ByVal TypeMeta m, ScalarType t);
+
+// #define DEFINE_CONSTANT(_, name)
+//   constexpr ScalarType k##name = ScalarType::name;
+
+@Namespace("c10") @MemberGetter public static native ScalarType kByte(); /* 0 */
+  @Namespace("c10") @MemberGetter public static native ScalarType kChar(); /* 1 */
+  @Namespace("c10") @MemberGetter public static native ScalarType kShort(); /* 2 */
+  @Namespace("c10") @MemberGetter public static native ScalarType kInt(); /* 3 */
+  @Namespace("c10") @MemberGetter public static native ScalarType kLong(); /* 4 */
+  @Namespace("c10") @MemberGetter public static native ScalarType kHalf(); /* 5 */
+  @Namespace("c10") @MemberGetter public static native ScalarType kFloat(); /* 6 */
+  @Namespace("c10") @MemberGetter public static native ScalarType kDouble(); /* 7 */
+  @Namespace("c10") @MemberGetter public static native ScalarType kComplexHalf(); /* 8 */
+  @Namespace("c10") @MemberGetter public static native ScalarType kComplexFloat(); /* 9 */
+  @Namespace("c10") @MemberGetter public static native ScalarType kComplexDouble(); /* 10 */
+  @Namespace("c10") @MemberGetter public static native ScalarType kBool(); /* 11 */
+  @Namespace("c10") @MemberGetter public static native ScalarType kQInt8(); /* 12 */
+  @Namespace("c10") @MemberGetter public static native ScalarType kQUInt8(); /* 13 */
+  @Namespace("c10") @MemberGetter public static native ScalarType kQInt32(); /* 14 */
+  @Namespace("c10") @MemberGetter public static native ScalarType kBFloat16(); /* 15 */
+// #undef DEFINE_CONSTANT
+
+@Namespace("c10") public static native @Cast("const char*") BytePointer toString(ScalarType t);
+
+@Namespace("c10") public static native @Cast("size_t") long elementSize(ScalarType t);
+
+@Namespace("c10") public static native @Cast("bool") boolean isIntegralType(ScalarType t);
+
+@Namespace("c10") public static native @Cast("bool") boolean isIntegralType(ScalarType t, @Cast("bool") boolean includeBool);
+
+@Namespace("c10") public static native @Cast("bool") boolean isFloatingType(ScalarType t);
+
+@Namespace("c10") public static native @Cast("bool") boolean isComplexType(ScalarType t);
+
+@Namespace("c10") public static native @Cast("bool") boolean isQIntType(ScalarType t);
+
+@Namespace("c10") public static native ScalarType toQIntType(ScalarType t);
+
+@Namespace("c10") public static native ScalarType toUnderlying(ScalarType t);
+
+@Namespace("c10") public static native @Cast("bool") boolean isSignedType(ScalarType t);
+
+@Namespace("c10") public static native @Cast("bool") boolean isUnderlying(ScalarType type, ScalarType qtype);
+
+@Namespace("c10") public static native ScalarType toValueType(ScalarType t);
+
+@Namespace("c10") public static native ScalarType toComplexType(ScalarType t);
+
+// see tensor_attributes.rst for detailed explanation and examples
+// of casting rules.
+@Namespace("c10") public static native @Cast("bool") boolean canCast(ScalarType from, ScalarType to);
+
+@Namespace("c10") public static native ScalarType promoteTypes(ScalarType a, ScalarType b);
+
+@Namespace("c10") public static native @Cast("std::ostream*") @ByRef @Name("operator <<") Pointer shiftLeft(
+    @Cast("std::ostream*") @ByRef Pointer stream,
+    @ByVal ScalarType scalar_type);
+
+ // namespace c10
+
+
+// Parsed from c10/core/DispatchKey.h
+
+// #pragma once
+
+// #include <iostream>
+// #include <string>
+// #include <c10/macros/Macros.h>
+
+// Semantically, a dispatch key identifies a possible "level" in our
+// dispatch, for which a handler may be registered.  Traditional
+// backends like CPU and CUDA get dispatch keys; however, so do
+// "wrapping" layers like Variable (for autograd handling).
+//
+// In implementation terms, the dispatch key identifies a specific "bit" in a
+// DispatchKeySet.  Higher bit indexes get handled by dispatching first (because
+// we "count leading zeros" when we extract the highest priority dispatch
+// key.)
+
+
+// Note [Private use DispatchKey]
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Private use tensor IDs are preallocated tensor type IDs for use in user
+// applications.  Similar to private use fields in HTTP, they can be used
+// by end users for experimental or private applications, without needing
+// to "standardize" the tensor ID (which would be done by submitting a PR
+// to PyTorch to add your type ID).
+//
+// Private use tensor IDs are appropriate to use if you want to experiment
+// with adding a new tensor type (without having to patch PyTorch first) or
+// have a private, non-distributed application that needs to make use of a
+// new tensor type.  Private use tensor IDs are NOT appropriate to use for
+// libraries intended to be distributed to further users: please contact
+// the PyTorch developers to get a type ID registered in this case.
+//
+// We provide two classes of private user tensor id: regular DispatchKeys
+// and PreAutograd DispatchKeys.  DispatchKeys serve the role of ordinary "backend"
+// DispatchKeys; if you were adding support for a new type of accelerator, you
+// would use a DispatchKey, and reuse autograd definitions already defined in
+// PyTorch for operators you define.  PreAutograd DispatchKeys serve as "wrapper"
+// DispatchKeys: they are most appropriate for tensors that compose multiple
+// internal tensors, and for cases when the built-in autograd formulas for
+// operators are not appropriate.
+
+// These are some convenience identifiers for dispatch keys which are
+// shorter to type than their long counterparts.  Note that some of these
+// dispatch keys directly correspond to DeviceType; and most APIs that
+// accept DispatchKey also accept DeviceType; e.g.,
+// torch::dispatch(torch::kCPU, ...) is also valid.
+
+ // namespace c10
+  // Expose the constant, but not the TYPE (DispatchKey is an implementation
+  // detail!)
+
+// Targeting ../DispatchKeyMap.java
+
+
+
+
+
+// Parsed from c10/core/DispatchKeySet.h
+
+// #pragma once
+
+// #include <c10/core/DispatchKey.h>
+// #include <c10/util/llvmMathExtras.h>
+// #include <c10/util/Exception.h>
+// #include <ostream>
+
+// A representation of a set of DispatchKeys.  A tensor may have multiple
+// tensor type ids, e.g., a Variable tensor can also be a CPU tensor; the
+// DispatchKeySet specifies what type ids apply.  The internal representation is
+// as a 64-bit bit set (this means only 64 tensor type ids are supported).
+//
+// Note that DispatchKeys are ordered; thus, we can ask questions like "what is
+// the highest priority DispatchKey in the set"?  (The set itself is not
+// ordered; two sets with the same ids will always have the ids ordered in the
+// same way.)
+//
+// At the moment, there are no nontrivial uses of this set; tensors are always
+// singletons.  In the near future, this set will represent variable? + tensor
+// type id.  In the far future, it will be requires grad? + profiling? +
+// tracing? + lazy? + tensor type id.
+//
+// (The difference between variable and requires grad, is that
+// there are currently three states a tensor can be:
+//  1. Not a variable
+//  2. Variable with requires_grad=False
+//  3. Variable with requires_grad=True
+// Eventually, we want to kill state (1), and only dispatch to autograd
+// handling code if one of the inputs requires grad.)
+//
+// An undefined tensor is one with an empty tensor type set.
+@Namespace("c10") public static native @Cast("std::ostream*") @ByRef @Name("operator <<") Pointer shiftLeft(@Cast("std::ostream*") @ByRef Pointer arg0, @ByVal @Cast("c10::DispatchKeySet*") Pointer arg1);
+
+// Historically, every tensor only had a single DispatchKey, and it was always
+// something like CPU, and there wasn't any of this business where TLS
+// could cause the DispatchKey of a tensor to change.  But we still have some
+// legacy code that is still using DispatchKey for things like instanceof
+// checks; if at all possible, refactor the code to stop using DispatchKey in
+// those cases.
+
+// For backwards compatibility with XLA repository
+// (I don't want to fix this in XLA right now because there might be
+// more renaming coming in the future.)
+@Namespace("c10") public static native @ByVal @Cast("c10::DispatchKeySet*") Pointer XLA();
+
+
+
+
+// Parsed from c10/core/DefaultDtype.h
+
+// #pragma once
+
+// #include <c10/macros/Macros.h>
+// Targeting ../TypeMeta.java
+
+
+ // namespace caffe2
+@Namespace("c10") public static native @Const @ByRef TypeMeta get_default_dtype();
+@Namespace("c10") public static native @Const @ByRef TypeMeta get_default_complex_dtype();
+ // namespace c10
+
+
+// Parsed from c10/core/Stream.h
+
+// #pragma once
+
+// #include <c10/core/Device.h>
+
+/** An index representing a specific stream.  A StreamId is not independently
+ *  meaningful without knowing the Device it is associated with; try to
+ *  use Stream rather than StreamId directly.
+ * 
+ *  StreamIds are opaque; they are assigned by some DeviceType-specific
+ *  numbering system which is not visible to the user.  HOWEVER, we
+ *  guarantee that StreamId 0 is always a valid stream, and corresponds
+ *  to some sort of "default" stream. */
+// Targeting ../Stream.java
+
+
+
+@Namespace("c10") public static native @Cast("std::ostream*") @ByRef @Name("operator <<") Pointer shiftLeft(@Cast("std::ostream*") @ByRef Pointer stream, @Const @ByRef Stream s);
+
+
+// Targeting ../StreamMap.java
+
+
+ // namespace std
+
+
+// Parsed from c10/core/impl/DeviceGuardImplInterface.h
+
+// #pragma once
+
+// #include <c10/core/Device.h>
+// #include <c10/core/DeviceType.h>
+// #include <c10/core/Stream.h>
+// #include <c10/util/Exception.h>
+
+// Just for C10_ANONYMOUS_VARIABLE
+// #include <c10/util/Registry.h>
+
+// #include <atomic>
+
+/**
+ * Flags defining the behavior of events.
+ *
+ * PYTORCH_DEFAULT and BACKEND_DEFAULT are valid for all backends. The
+ * BACKEND_DEFAULT is what a particular backend would select if no
+ * flags were given. PYTORCH_DEFAULT is the PyTorch's framework default
+ * choice for events on that backend, which may not be the same. For example,
+ * when PyTorch creates a CUDA event it sets the flag
+ * CUDA_EVENT_DISABLING_TIMING by default to improve performance.
+ *
+ * The mapping of PYTORCH_DEFAULT and BACKEND_DEFAULT is done by each
+ * backend implementation. Backend-specific flags, like CUDA_EVENT_DEFAULT,
+ * should map one-to-one with actual event flags for those backends.
+ */
+@Namespace("c10") public enum EventFlag {
+    PYTORCH_DEFAULT(0),
+    BACKEND_DEFAULT(1),
+    // CUDA flags
+    CUDA_EVENT_DEFAULT(2),
+    CUDA_EVENT_DISABLE_TIMING(3), // PyTorch-default for CUDA
+    // HIP flags
+    HIP_EVENT_DEFAULT(4),
+    HIP_EVENT_DISABLE_TIMING(5), // PyTorch-default for HIP
+    // FOR TESTING ONLY
+    INVALID(6);
+
+    public final int value;
+    private EventFlag(int v) { this.value = v; }
+    private EventFlag(EventFlag e) { this.value = e.value; }
+    public EventFlag intern() { for (EventFlag e : values()) if (e.value == value) return e; return this; }
+    @Override public String toString() { return intern().name(); }
+}
+// Targeting ../DeviceGuardImplInterface.java
+
+
+
+// The registry is NON-owning.  Each stored pointer is std::atomic so
+// that under all interleavings of registry calls the structure is
+// race-free.  This doesn't cost us anything on reads in X86.  (An
+// unsynchronized implementation probably is OK too, but I didn't want
+// to prove that we never read from device_guard_impl_registry at the
+// same time some registration is occurring.  Shiver.)
+//
+// I'd like this registry to be valid even at program destruction time
+// (in case someone uses a DeviceGuard in a destructor to do some cleanup
+// in the CUDA API.)  Since there are no direct accesses of the underlying
+// owning objects which I can use to enforce initialization order (unlike
+// in a Meyer singleton), it implies that you must *leak* objects when
+// putting them in the registry.  This is done by deleting the destructor
+// on DeviceGuardImplInterface.
+// Targeting ../DeviceGuardImplRegistrar.java
+
+
+
+// #define C10_REGISTER_GUARD_IMPL(DevType, DeviceGuardImpl)
+//   static ::c10::impl::DeviceGuardImplRegistrar C10_ANONYMOUS_VARIABLE(g_##DeviceType)(::c10::DeviceType::DevType, new DeviceGuardImpl());
+
+@Namespace("c10::impl") public static native @Const DeviceGuardImplInterface getDeviceGuardImpl(@Cast("c10::DeviceType") short type);
+
+@Namespace("c10::impl") public static native @Cast("bool") boolean hasDeviceGuardImpl(@Cast("c10::DeviceType") short type);
+
+ // namespace c10::impl
+
+
+// Parsed from c10/core/GeneratorImpl.h
+
+// #pragma once
+
+// #include <stdint.h>
+// #include <mutex>
+// #include <deque>
+// #include <atomic>
+// #include <typeinfo>
+// #include <utility>
+
+// #include <c10/util/Exception.h>
+// #include <c10/util/C++17.h>
+// #include <c10/util/intrusive_ptr.h>
+// #include <c10/core/Device.h>
+// #include <c10/core/DispatchKeySet.h>
+// #include <c10/util/python_stub.h>
+
+/**
+ * Note [Generator]
+ * ~~~~~~~~~~~~~~~~
+ * A Pseudo Random Number Generator (PRNG) is an engine that uses an algorithm to
+ * generate a seemingly random sequence of numbers, that may be later be used in creating
+ * a random distribution. Such an engine almost always maintains a state and requires a
+ * seed to start off the creation of random numbers. Often times, users have
+ * found it beneficial to be able to explicitly create, retain, and destroy
+ * PRNG states and also be able to have control over the seed value.
+ *
+ * A Generator in ATen gives users the ability to read, write and modify a PRNG engine.
+ * For instance, it does so by letting users seed a PRNG engine, fork the state of the
+ * engine, etc.
+ *
+ * By default, there is one generator per device, and a device's generator is
+ * lazily created. A user can use the torch.Generator() api to create their own generator.
+ * Currently torch.Generator() can only create a CPUGeneratorImpl.
+ */
+
+/**
+ * Note [Acquire lock when using random generators]
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * Generator and its derived classes are NOT thread-safe. Please note that most of the
+ * places where we have inserted locking for generators are historically based, and we
+ * haven't actually checked that everything is truly thread safe (and it probably isn't).
+ * Please use the public mutex_ when using any methods from these classes, except for the
+ * read-only methods. You can learn about the usage by looking into the unittests
+ * (aten/src/ATen/cpu_generator_test.cpp) and other places where we have used lock_guard.
+ * 
+ * TODO: Look into changing the threading semantics of Generators in ATen (e.g., making
+ * them non-thread safe and instead making the generator state splittable, to accommodate
+ * forks into other threads).
+ */
+
+// The default seed is selected to be a large number
+// with good distribution of 0s and 1s in bit representation
+@Namespace("c10") @MemberGetter public static native @Cast("const uint64_t") long default_rng_seed_val();
+// Targeting ../GeneratorImpl.java
+
+
+
+ // namespace detail
+
+ // namespace c10
+
+
+// Parsed from c10/core/MemoryFormat.h
+
+// #pragma once
+
+// #include <c10/core/Backend.h>
+// #include <c10/util/Exception.h>
+// #include <c10/util/ArrayRef.h>
+
+// #include <iostream>
+
+// Memory format is not the property of a Tensor. It is the way to tell an
+// operator how the result should be organized in memory and nothing more. That
+// means memory format should never be used as return value for any tensor state
+// interrogation functions (internally and externally).
+//
+// Possible options are:
+//  Preserve:
+//    If any of the input tensors is in channels_last format, operator output
+//    should be in channels_last format
+//
+//  Contiguous:
+//    Regardless of input tensors format, the output should be contiguous Tensor.
+//
+//  ChannelsLast:
+//    Regardless of input tensors format, the output should be in channels_last format.
+@Namespace("c10") public enum MemoryFormat { Contiguous((byte)0), Preserve((byte)1), ChannelsLast((byte)2), ChannelsLast3d((byte)3);
+
+    public final byte value;
+    private MemoryFormat(byte v) { this.value = v; }
+    private MemoryFormat(MemoryFormat e) { this.value = e.value; }
+    public MemoryFormat intern() { for (MemoryFormat e : values()) if (e.value == value) return e; return this; }
+    @Override public String toString() { return intern().name(); }
+}
+
+// If you are seeing this, it means that this call site was not checked if
+// the memory format could be preserved, and it was switched to old default
+// behaviour of contiguous
+// #define LEGACY_CONTIGUOUS_MEMORY_FORMAT c10::get_contiguous_memory_format()
+
+@Namespace("c10") public static native MemoryFormat get_contiguous_memory_format();
+
+// Note: Hardcoded the channel last stride indices here to get better performance
+@Namespace("c10") public static native @Cast("int64_t*") @StdVector LongPointer get_channels_last_strides_2d(@ByVal @Cast("c10::IntArrayRef*") Pointer sizes);
+
+@Namespace("c10") public static native @Cast("int64_t*") @StdVector LongPointer get_channels_last_strides_3d(@ByVal @Cast("c10::IntArrayRef*") Pointer sizes);
+
+// NOTE:
+// Below are Helper functions for is_channels_last_strides_xd.
+// 1. Please do not combine these helper functions, each helper function handles
+// exactly one case of sizes + memory_format, by doing this, the strides indices
+// will be a constant array and we can access it using constant index number,
+// the complier will fully unroll the loop on strides indices to gain a better
+// performance.
+// 2. No error check in helper function, caller ensures the correctness of the input
+// 3. All helper functions have similar comments, only 1st helper function is commented here.
+@Namespace("c10") public static native @Cast("bool") boolean is_channels_last_strides_2d_s4(@ByVal @Cast("const c10::IntArrayRef*") Pointer sizes, @ByVal @Cast("const c10::IntArrayRef*") Pointer strides);
+
+@Namespace("c10") public static native @Cast("bool") boolean is_channels_last_strides_3d_s5(@ByVal @Cast("const c10::IntArrayRef*") Pointer sizes, @ByVal @Cast("const c10::IntArrayRef*") Pointer strides);
+
+// Note [Ambiguous is_channels_last_strides_xd]
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// The flaw of carrying memory_format implicitly through strides is very hard
+// to WAR properly. issue #24090
+// Without the history of permutation, we can't infer the memory_format of a
+// tensor from the snapshot of its size & stride
+// e.g.
+//
+// 1. We can NOT specify the memory_format of N111 tensor through strides in a
+//  meaningful way;
+//
+// 2. Two path that ended up with identical size/stride
+//  N11W contiguous tensor sliced at w-dimension becomes [N,1,1,1]@[W,W,W,W]
+//  NC11 channels_last tensor sliced at c-dimension becomes [N,1,1,1]@[C,C,C,C]
+//    So if we see a tensor [N,1,1,1]@[X,X,X,X], there's no way for us to infer
+//    the memory_format of the original tensor.
+//
+// Due to the limitations, our temporary WAR `is_channels_last_strides` does the
+// best effort to infer whether the original memory_format of a tensor is
+// at::MemoryFormat::ChannelsLast. The two objectives of this function (ordered
+// by their importance):
+//   1. Ensure that normal shape manipulation does not accidentally change the
+//      MemoryFormat of an existing tensor.
+//   2. Allows user to mark MemoryFormat::ChannelsLast to tensors;
+//
+// The function does so via checking strides of the tensor, including strides of
+// size-1 dimensions. Although conventionally PyTorch implies no restriction on
+// trivial stride (stride for size-1 dimension).
+//
+// Note that this approach is a compromise. We did not solve the problem
+// completely. Many cases we will not be able to infer the correct memory
+// format.
+// The implementation of `is_channels_last_strides` is to serve the objectives:
+// MemoryFormat::ChannelsLast has to be explicitly opted-in (no accidental
+// conversion); Best effort to maintain the ChannelsLast flag.
+//
+// Due to the fact that this is not a bulletproof solution, through testing
+// (aten/src/ATen/test/memory_format_test.cpp)
+//   a. we ensure that the common tasks are supported;
+//   a. we identify corner cases where the implementation compromises on.
+//
+// By the time accumulated permutation is enabled to replace implicit
+// memory_foramt through strides, we should be updating our tests and fix the
+// issues in our tests.
+//
+// We use Channels Last 2d as an example above.
+// This is a general problem for all the is_channels_last_strides_xd implementation.
+// Please check the helper functions (is_channels_last_strides_*d_s*) for more details.
+
+@Namespace("c10") public static native @Cast("bool") boolean is_channels_last_strides_2d(@ByVal @Cast("const c10::IntArrayRef*") Pointer sizes, @ByVal @Cast("const c10::IntArrayRef*") Pointer strides);
+
+@Namespace("c10") public static native @Cast("bool") boolean is_channels_last_strides_3d(@ByVal @Cast("const c10::IntArrayRef*") Pointer sizes, @ByVal @Cast("const c10::IntArrayRef*") Pointer strides);
+
+ // namespace c10
+
+
+// Parsed from c10/core/Storage.h
+
+// #pragma once
+
+// #include <c10/core/StorageImpl.h>
+
+ // namespace c10
+
+
+// Parsed from c10/core/Layout.h
+
+// #pragma once
+
+// #include <c10/core/Backend.h>
+// #include <c10/util/Exception.h>
+
+// #include <iostream>
+@Namespace("c10") public enum Layout { Strided((byte)0), Sparse((byte)1), Mkldnn((byte)2), NumOptions((byte)3);
+
+    public final byte value;
+    private Layout(byte v) { this.value = v; }
+    private Layout(Layout e) { this.value = e.value; }
+    public Layout intern() { for (Layout e : values()) if (e.value == value) return e; return this; }
+    @Override public String toString() { return intern().name(); }
+}
+
+
+
+
+
+@Namespace("c10") public static native Layout layout_from_backend(Backend backend);
+
+@Namespace("c10") public static native @Cast("std::ostream*") @ByRef @Name("operator <<") Pointer shiftLeft(@Cast("std::ostream*") @ByRef Pointer stream, @ByVal Layout layout);
+
+ // namespace c10
+
+
+// Parsed from c10/core/QScheme.h
+
+// #pragma once
+
+// #include <c10/core/DeviceType.h>
+// #include <c10/util/Exception.h>
+
+/**
+ * QScheme is an enum that specifies the type of quantization. This has a one
+ * to one correspondence with Quantizer
+ * Please refer to ATen/quantized/Quantizer.h to see the Quantizers classes.
+ * Keep this file in sync with torch/nn/_qscheme.py
+ */
+@Namespace("c10") public enum QScheme {
+  PER_TENSOR_AFFINE((byte)0),
+  PER_CHANNEL_AFFINE((byte)1),
+  PER_TENSOR_SYMMETRIC((byte)2),
+  PER_CHANNEL_SYMMETRIC((byte)3),
+  COMPILE_TIME_NUM_QSCHEMES((byte)4);
+
+    public final byte value;
+    private QScheme(byte v) { this.value = v; }
+    private QScheme(QScheme e) { this.value = e.value; }
+    public QScheme intern() { for (QScheme e : values()) if (e.value == value) return e; return this; }
+    @Override public String toString() { return intern().name(); }
+}
+
+
+
+
+
+@Namespace("c10") @MemberGetter public static native int COMPILE_TIME_NUM_QSCHEMES();
+
+@Namespace("c10") public static native @StdString BytePointer toString(QScheme qscheme);
+
+ // namespace c10
+
+
+// Parsed from c10/core/TensorImpl.h
+
+// #pragma once
+
+// #include <atomic>
+// #include <memory>
+// #include <numeric>
+
+// #include <c10/core/Backend.h>
+// #include <c10/core/MemoryFormat.h>
+// #include <c10/core/Storage.h>
+// #include <c10/core/TensorOptions.h>
+// #include <c10/core/DispatchKeySet.h>
+// #include <c10/core/impl/LocalDispatchKeySet.h>
+// #include <c10/core/CopyBytes.h>
+
+// #include <c10/util/Exception.h>
+// #include <c10/util/Optional.h>
+// #include <c10/util/Flags.h>
+// #include <c10/util/Logging.h>
+// #include <c10/util/python_stub.h>
+
+// A global boolean variable to control whether we free memory when a Tensor
+// is shrinked to a smaller size. As a result, a Tensor is always going to
+// keep the memory allocated for its maximum capacity reshaped to so far.
+//
+// This parameter is respected "upper-case" methods which call Resize()
+// (e.g., CopyFrom, ResizeLike); it is NOT respected by Tensor::resize_
+// or ShrinkTo, both of which guarantee to never to free memory.
+
+
+// Since we can have high variance in blob memory allocated across different
+// inputs in the same run, we will shrink the blob only if the memory gain
+// is larger than this flag in bytes.  This only applies to functions which
+// respect caffe2_keep_on_shrink.
+
+
+// Targeting ../Scalar.java
+
+
+
+/**
+ * A utility function to convert vector<int> to vector<int64_t>.
+ */
+
+
+/**
+ * Return product of all dimensions starting from k
+ */
+@Namespace("c10") public static native @Cast("int64_t") long size_from_dim_(int k, @ByVal @Cast("c10::IntArrayRef*") Pointer dims);
+
+// Product of all dims up to k (not including dims[k])
+@Namespace("c10") public static native @Cast("int64_t") long size_to_dim_(int k, @ByVal @Cast("c10::IntArrayRef*") Pointer dims);
+
+// Product of all dims between k and l (not including dims[k] and dims[l])
+@Namespace("c10") public static native @Cast("int64_t") long size_between_dim_(int k, int l, @ByVal @Cast("c10::IntArrayRef*") Pointer dims);
+
+// Wrap around axis_index if it is negative, s.t., -1 is the last dim
+@Namespace("c10") public static native int canonical_axis_index_(int axis_index, int ndims);
+// Targeting ../PlacementDtor.java
+
+
+
+/*
+ * A Context that will call extra placement deleter during
+ * deconstruction.
+ *
+ * Accept a already constructed DataPtr and store it as member
+ * during destruction, we'll call extra deleter on the underlying
+ * data pointer before the DataPtr is destructed.
+ * `data_ptr_` owns the memory.
+ */
+// Targeting ../AutogradMetaInterface.java
+
+
+// Targeting ../AutogradMetaFactory.java
+
+
+// Targeting ../AutogradMetaFactoryRegisterer.java
+
+
+
+ // namespace impl
+// Targeting ../VariableVersion.java
+
+
+// Targeting ../TensorImpl.java
+
+
+
+// Note [TensorImpl size constraints]
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Changed the size of TensorImpl?  If the size went down, good for
+// you!  Adjust the documentation below and the expected size.
+// Did it go up?  Read on...
+//
+// Struct size matters.  In some production systems at Facebook, we have
+// 400M live tensors during a training run.  Do the math: every 64-bit
+// word you add to Tensor is an extra 3.2 gigabytes in RAM.
+//
+// If you are a Facebook employee, you can check if the run in question
+// has tipped you over the point using the command here:
+// https://fburl.com/q5enpv98
+//
+// For reference, we OOMed at 160 bytes (20 words) per TensorImpl.
+// This is not counting overhead from strides out-of-line allocation and
+// StorageImpl space and this is from before we inlined sizes and strides
+// directly into TensorImpl as SmallVectors.
+//
+// Our memory usage on 32-bit systems is suboptimal, but we're not checking
+// for it at the moment (to help avoid rage inducing cycles when the
+// 32-bit number is wrong).
+//
+// Current breakdown:
+//
+//    vtable pointer
+//    strong refcount           TODO: pack these into one word
+//    weak refcount
+//    storage pointer
+//    autograd metadata pointer
+//    version counter pointer
+//    PyObject pointer
+//    sizes SmallVector (begin)
+//    sizes SmallVector (end)
+//    sizes SmallVector (capacity)
+//    sizes SmallVector (pre-allocated 0)
+//    sizes SmallVector (pre-allocated 1)
+//    sizes SmallVector (pre-allocated 2)
+//    sizes SmallVector (pre-allocated 3)
+//    sizes SmallVector (pre-allocated 4)
+//    strides SmallVector (begin)
+//    strides SmallVector (end)
+//    strides SmallVector (capacity)
+//    strides SmallVector (pre-allocated 0)
+//    strides SmallVector (pre-allocated 1)
+//    strides SmallVector (pre-allocated 2)
+//    strides SmallVector (pre-allocated 3)
+//    strides SmallVector (pre-allocated 4)
+//    storage offset
+//    numel
+//    data type pointer
+//    (optional) device
+//    tensor type id
+//    miscellaneous bitfield
+//
+ // namespace c10
+
+
+// Parsed from ATen/detail/HIPHooksInterface.h
+
+// #pragma once
+
+// #include <c10/core/Allocator.h>
+// #include <ATen/core/Generator.h>
+// #include <c10/util/Exception.h>
+
+// #include <c10/util/Registry.h>
+
+// #include <cstddef>
+// #include <functional>
+// #include <memory>
+// Targeting ../THHState.java
+
+
+
+
+// NB: Class must live in `at` due to limitations of Registry.h.
+// Targeting ../HIPHooksInterface.java
+
+
+// Targeting ../HIPHooksArgs.java
+
+
+
+
+// #define REGISTER_HIP_HOOKS(clsname)
+//   C10_REGISTER_CLASS(HIPHooksRegistry, clsname, clsname)
+
+ // namespace detail
+ // namespace at
+
+
+// Parsed from ATen/detail/CUDAHooksInterface.h
+
+// #pragma once
+
+// #include <c10/core/Allocator.h>
+// #include <ATen/core/Generator.h>
+// #include <c10/util/Exception.h>
+// #include <c10/util/Optional.h>
+// #include <c10/util/Registry.h>
+
+// #include <cstddef>
+// #include <functional>
+// #include <memory>
+// Targeting ../THCState.java
+
+
+// Targeting ../NVRTC.java
+
+
+ // at::cuda
+
+
+// NB: Class must live in `at` due to limitations of Registry.h.
+
+// #ifdef _MSC_VER
+@Namespace("at") @MemberGetter public static native @Cast("const char*") BytePointer CUDA_HELP();
+// #else
+// Targeting ../CUDAHooksInterface.java
+
+
+// Targeting ../CUDAHooksArgs.java
+
+
+
+
+// #define REGISTER_CUDA_HOOKS(clsname)
+//   C10_REGISTER_CLASS(CUDAHooksRegistry, clsname, clsname)
+ // namespace detail
+ // namespace at
+
+
+// Parsed from ATen/detail/CPUGuardImpl.h
+
+// #pragma once
+
+// #include <c10/core/impl/DeviceGuardImplInterface.h>
+// #include <c10/macros/Macros.h>
+// Targeting ../CPUGuardImpl.java
+
+
+
+ // namespace at::detail
+
+
+// Parsed from ATen/core/Dimname.h
+
+// #pragma once
+
+// #include <ATen/core/interned_strings.h>
+// #include <c10/util/ArrayRef.h>
+// #include <c10/util/Optional.h>
+// #include <ostream>
+
+/** enum class at::NameType */
+public static final byte BASIC = (byte)0, WILDCARD = (byte)1;
+// Targeting ../Dimname.java
+
+
+
+@Namespace("at") public static native @Cast("std::ostream*") @ByRef @Name("operator <<") Pointer shiftLeft(@Cast("std::ostream*") @ByRef Pointer out, @Const @ByRef Dimname dimname);
+
+@Namespace("at") public static native @Cast("bool") @Name("operator ==") boolean equals(@Const @ByRef Dimname lhs, @Const @ByRef Dimname rhs);
+
+@Namespace("at") public static native @Cast("bool") @Name("operator !=") boolean notEquals(@Const @ByRef Dimname lhs, @Const @ByRef Dimname rhs);
+
+ // namespace at
+
+
+// Parsed from ATen/core/DeprecatedTypePropertiesRegistry.h
+
+// #pragma once
+
+// In order to preserve bc, we make DeprecatedTypeProperties instances unique
+// just like they are for Type.
+
+// #include <c10/core/Backend.h>
+// #include <c10/core/ScalarType.h>
+// Targeting ../DeprecatedTypeProperties.java
+
+
+// Targeting ../DeprecatedTypePropertiesDeleter.java
+
+
+
+ // namespace at
+
+
+// Parsed from ATen/core/Generator.h
+
+// #pragma once
+
+// #include <stdint.h>
+// #include <mutex>
+// #include <deque>
+// #include <atomic>
+// #include <typeinfo>
+// #include <utility>
+// #include <cstddef>
+
+// #include <c10/util/Exception.h>
+// #include <c10/util/C++17.h>
+// #include <c10/util/intrusive_ptr.h>
+// #include <c10/core/Device.h>
+// #include <c10/core/DispatchKeySet.h>
+// #include <c10/core/GeneratorImpl.h>
+// Targeting ../Generator.java
+
+
+
+ // namespace at
+
+
+
+// Parsed from ATen/Context.h
+
+// #pragma once
+
+// #include <ATen/core/ATenGeneral.h>
+// #include <ATen/Tensor.h>
+// #include <ATen/Utils.h>
+// #include <ATen/core/ATenGeneral.h>
+// #include <ATen/core/Generator.h>
+// #include <ATen/CPUGeneratorImpl.h>
+// #include <ATen/core/LegacyTypeDispatch.h>
+// #include <ATen/detail/CUDAHooksInterface.h>
+// #include <ATen/detail/HIPHooksInterface.h>
+// #include <c10/util/Exception.h>
+// #include <c10/core/impl/DeviceGuardImplInterface.h>
+// #include <c10/core/QEngine.h>
+
+// #include <memory>
+// #include <mutex>
+// #include <cstdint>
+// Targeting ../Context.java
+
+
+
+@Namespace("at") public static native void init();
+
+@Namespace("at") public static native @ByRef DeprecatedTypeProperties getDeprecatedTypeProperties(@ByVal Backend p, @ByVal ScalarType s);
+
+@Namespace("at") public static native @ByRef DeprecatedTypeProperties CPU(@ByVal ScalarType s);
+
+@Namespace("at") public static native @ByRef DeprecatedTypeProperties CUDA(@ByVal ScalarType s);
+
+@Namespace("at") public static native @ByRef DeprecatedTypeProperties HIP(@ByVal ScalarType s);
+
+@Namespace("at") public static native @Cast("bool") boolean hasCUDA();
+
+@Namespace("at") public static native @Cast("bool") boolean hasHIP();
+
+@Namespace("at") public static native @Cast("bool") boolean hasXLA();
+
+// Despite its name, this function returns the number of *CUDA* GPUs.
+@Namespace("at") public static native @Cast("size_t") long getNumGPUs();
+
+@Namespace("at") public static native @Cast("bool") boolean hasOpenMP();
+
+@Namespace("at") public static native @Cast("bool") boolean hasMKL();
+
+@Namespace("at") public static native @Cast("bool") boolean hasLAPACK();
+
+@Namespace("at") public static native @Cast("bool") boolean hasMAGMA();
+
+@Namespace("at") public static native @Cast("bool") boolean hasMKLDNN();
+
+@Namespace("at") public static native void manual_seed(@Cast("uint64_t") long seed);
+
+ // namespace at
+
+
+// Parsed from ATen/ATen.h
+
+// #pragma once
+
+// #include <c10/core/Allocator.h>
+// #include <ATen/core/ATenGeneral.h>
+// #include <ATen/Context.h>
+// #include <ATen/Device.h>
+// #include <ATen/DeviceGuard.h>
+// #include <ATen/DimVector.h>
+// #include <ATen/Dispatch.h>
+// #include <ATen/DynamicLibrary.h>
+// #include <ATen/Formatting.h>
+// #include <ATen/Functions.h>
+// #include <ATen/NamedTensor.h>
+// #include <ATen/ScalarOps.h>
+// #include <ATen/Tensor.h>
+// #include <ATen/TensorGeometry.h>
+// #include <ATen/TensorIndexing.h>
+// #include <ATen/TensorOperators.h>
+// #include <ATen/Version.h>
+// #include <ATen/core/ATenGeneral.h>
+// #include <ATen/core/Generator.h>
+// #include <c10/core/Layout.h>
+// #include <ATen/core/Scalar.h>
+// #include <c10/core/Storage.h>
+// #include <c10/core/TensorOptions.h>
+// #include <ATen/core/Reduction.h>
+// #include <c10/util/Exception.h>
+// #include <ATen/core/UnsafeFromTH.h>
+// #include <ATen/core/ivalue.h>
+
+
+// Parsed from ATen/Tensor.h
+
+// #pragma once
+
+// #include <ATen/core/TensorBody.h>
+
+
+// Parsed from ATen/core/NamedTensor.h
+
+// #pragma once
+
+// #include <ATen/core/Dimname.h>
+// #include <c10/core/TensorImpl.h>
+// #include <c10/util/C++17.h>
+
+// XXX: This file exists because TensorImpl is in c10, but Dimname is in ATen.
+// Due to the c10/ATen library split, TensorImpl cannot depend on Dimname,
+// so we have a couple of workarounds.
+//
+// In the long term, we'll move Dimname to c10 and everything in this file
+// can be refactored out. The main blocker for that is that "c10::Symbol"
+// actually exists outside of c10 and needs to be moved in.
+
+// TensorImpl has a unique_ptr<NamedTensorMetaInterface> field.
+// XXX: Ideally we would just put optional<vector<Dimname>> into TensorImpl.
+//
+// This class has an important invariant: there must be at least ONE
+// non-wildcard
+// Targeting ../NamesMode.java
+
+
+// Targeting ../NoNamesGuard.java
+
+
+
+@Namespace("at") public static native void check_names_valid_for(@Const @ByRef Tensor tensor, @ByVal @Cast("at::DimnameList*") Pointer names);
+@Namespace("at") public static native void check_names_valid_for(@Cast("size_t") long tensor_dim, @ByVal @Cast("at::DimnameList*") Pointer names);
+
+// Sets the names of `tensor` to be `names`.
+
+@Namespace("at") @MemberGetter public static native @Cast("const size_t") long kMaxNamedTensorDim();
+
+@Namespace("at") public static native @ByVal @Cast("at::DimnameList*") Pointer default_names(@Cast("size_t") long len);
+
+// Some helper functions on TensorImpl. Useful for working with names in TH.
+// XXX: Ideally these would exist as methods on TensorImpl
+
+@Namespace("at::impl") public static native void check_names_valid_for(@Cast("at::TensorImpl*") Pointer impl, @ByVal @Cast("at::DimnameList*") Pointer names);
+
+// Returns true if the tensor's names exist and are not all 'None'.
+// Returns false if the tensor's names don't exist (were not allocated),
+// or if all names are 'None'.
+// We treat not-allocated-names the same as allocated names that are all 'None'.
+
+// Returns the names of the tensor's dimensions.
+// Unnamed tensors are treated as having 'None' in all dimension; this method
+// would return a DimnameList of all 'None's for an unnamed tensor.
+
+// This is more of an implementation detail; one should use impl::get_names /
+// Tensor::names() whenever possible because it provides a cleaner API.
+// Returns the names of the tensor if they have been allocated; returns nullopt
+// instead if the haven't been. The names of a tensor are not allocated if a
+// tensor is constructed with names=None.
+
+
+ // namespace impl
+
+ // namespace at
+
+
+// Parsed from ATen/core/TensorBody.h
+
+// #pragma once
+
+// #include <c10/core/Device.h>
+// #include <c10/core/Layout.h>
+// #include <c10/core/MemoryFormat.h>
+// #include <c10/core/QScheme.h>
+// #include <c10/core/Scalar.h>
+// #include <c10/core/ScalarType.h>
+// #include <c10/core/Storage.h>
+// #include <ATen/core/TensorAccessor.h>
+// #include <c10/core/TensorImpl.h>
+// #include <c10/core/UndefinedTensorImpl.h>
+// #include <c10/util/Exception.h>
+// #include <c10/util/Deprecated.h>
+// #include <c10/util/Optional.h>
+// #include <c10/util/intrusive_ptr.h>
+// #include <ATen/core/DeprecatedTypePropertiesRegistry.h>
+// #include <ATen/core/DeprecatedTypeProperties.h>
+// #include <ATen/core/NamedTensor.h>
+// #include <torch/csrc/WindowsTorchApiMacro.h>
+
+// Targeting ../TensorOptions.java
+
+
+
+// Targeting ../Type.java
+
+
+
+// Targeting ../TensorIndex.java
+
+
+ // namespace indexing
+
+// Targeting ../Node.java
+
+
+
+ // namespace torch::autograd
+// Targeting ../Quantizer.java
+
+
+// This is temporary typedef to enable Quantizer in aten native function API
+// we'll remove them when we are actually exposing Quantizer class
+// to frontend
+@Namespace("at::impl") public static native @Cast("bool") boolean variable_excluded_from_dispatch();
+
+// Targeting ../Tensor.java
+
+
+
+@Namespace("at") public static native @Cast("int64_t") long get_device(@ByVal Tensor self);
+
+
+
+
+// Helper creator for Tensor class which doesn't requires the users to pass
+// in an intrusive_ptr instead it just converts the argument passed to
+// requested intrusive_ptr type.
+
+ // namespace detail
+
+@Namespace("at") public static native @ByVal DispatchKey legacyExtractDispatchKey(@Const @ByRef Tensor t);
+
+ // namespace at
+
 
 // Parsed from torch/script.h
 

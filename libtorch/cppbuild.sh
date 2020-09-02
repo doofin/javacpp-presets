@@ -26,8 +26,8 @@ cd "$PLATFORM"
 INSTALL_PATH=`pwd`
 
 echo "Decompressing archives..."
-unzip ../libtorch-macos-$LIBTORCH_VERSION.zip
-mv libtorch/* .
+#unzip ../libtorch-macos-$LIBTORCH_VERSION.zip
+#mv libtorch/* .
 
 export LIBRARY_PATH="$INSTALL_PATH/lib"
 export PATH="$INSTALL_PATH/bin:$PATH"
