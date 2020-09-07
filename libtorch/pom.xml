@@ -37,6 +37,11 @@
             <compilerOption>-std=c++14</compilerOption>
             <compilerOption>-fpermissive</compilerOption>
           </compilerOptions>
+          <includePaths>
+            <includePath>${basedir}/cppbuild/${javacpp.platform}${javacpp.platform.extension}/include/torch/csrc/api/include/</includePath>
+            <includePath>${basedir}/cppbuild/${javacpp.platform}${javacpp.platform.extension}/include/</includePath>
+            <includePath>${basedir}/target/classes/org/bytedeco/${javacpp.packageName}/include/</includePath>
+          </includePaths>
         </configuration>
       </plugin>
       <plugin>

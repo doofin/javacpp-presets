@@ -7,13 +7,10 @@ import org.bytedeco.javacpp.annotation.Namespace;
 import org.bytedeco.javacpp.annotation.Opaque;
 import org.bytedeco.javacpp.annotation.Properties;
 
-
-// Forward declarations confuse Doxygen
-// #ifndef DOXYGEN_SHOULD_SKIP_THIS
-@Namespace("at") @Opaque @Properties(inherit = org.bytedeco.libtorch.presets.libtorch.class)
-public class Tensor extends Pointer {
+@Namespace("torch::serialize") @Opaque @Properties(inherit = org.bytedeco.libtorch.presets.libtorch.class)
+public class OutputArchive extends Pointer {
     /** Empty constructor. Calls {@code super((Pointer)null)}. */
-    public Tensor() { super((Pointer)null); }
+    public OutputArchive() { super((Pointer)null); }
     /** Pointer cast constructor. Invokes {@link Pointer#Pointer(Pointer)}. */
-    public Tensor(Pointer p) { super(p); }
+    public OutputArchive(Pointer p) { super(p); }
 }

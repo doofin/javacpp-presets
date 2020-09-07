@@ -9,10 +9,37 @@ import org.bytedeco.javacpp.Pointer;
 import org.bytedeco.javacpp.annotation.*;
 import org.bytedeco.libtorch.*;
 
+import java.nio.LongBuffer;
+
 public class libtorch extends org.bytedeco.libtorch.presets.libtorch {
     static { Loader.load(); }
 
-// Targeting ../QEngineVector.java
+// Parsed from c10/core/QEngine.h
+
+// #pragma once
+
+// #include <c10/core/DeviceType.h>
+// #include <c10/core/DispatchKey.h>
+// #include <c10/util/Exception.h>
+
+/**
+ * QEngine is an enum that is used to select the engine to run quantized ops.
+ * Keep this enum in sync with get_qengine_id() in
+ * torch/backends/quantized/__init__.py
+ */
+/** enum class c10::QEngine */
+public static final byte
+  NoQEngine = (byte)0,
+  FBGEMM = (byte)1,
+  QNNPACK = (byte)2;
+
+
+
+
+
+@Namespace("c10") public static native @StdString BytePointer toString(@Cast("c10::QEngine") byte qengine);
+
+ // namespace c10
 
 
 // Parsed from c10/core/DeviceType.h
@@ -100,192 +127,6 @@ public static final short
 
 
  // namespace std
-
-
-// Parsed from c10/core/Allocator.h
-
-// #pragma once
-
-// #include <stddef.h>
-// #include <memory>
-
-// #include <c10/core/Device.h>
-// #include <c10/util/Exception.h>
-// #include <c10/util/ThreadLocalDebugInfo.h>
-// #include <c10/util/UniqueVoidPtr.h>
-
-// A DataPtr is a unique pointer (with an attached deleter and some
-// context for the deleter) to some memory, which also records what
-// device is for its data.
-//
-// nullptr DataPtrs can still have a nontrivial device; this allows
-// us to treat zero-size allocations uniformly with non-zero allocations.
-//
-
-// NB: Device is NOT tested for here; a CUDA nullptr is as much a nullptr as a
-// CPU nullptr
-
-// Note [raw_allocate/raw_deallocate and Thrust]
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-// Thrust's support for custom allocators requires us to write something
-// like this:
-//
-//  class ThrustAllocator {
-//    char* allocate(size_t);
-//    void deallocate(char*, size_t);
-//  };
-//
-// This is not good for our unique_ptr based allocator interface, as
-// there is no way to get to the context when we free.
-//
-// However, in some cases the context is exactly the same as
-// the data pointer.  In this case, we can support the "raw"
-// allocate and deallocate interface.  This is what
-// raw_deleter signifies.  By default, it returns a nullptr, which means that
-// the raw interface is not implemented.  Be sure to implement it whenever
-// possible, or the raw interface will incorrectly reported as unsupported,
-// when it is actually possible.
-
-// This context is used to generate DataPtr which have arbitrary
-// std::function deleters associated with them.  In some user facing
-// functions, we give a (user-friendly) interface for constructing
-// tensors from external data which take an arbitrary std::function
-// deleter.  Grep for InefficientStdFunctionContext to find these
-// occurrences.
-//
-// This context is inefficient because we have to do a dynamic
-// allocation InefficientStdFunctionContext, on top of the dynamic
-// allocation which is implied by std::function itself.
-
-/** Set the allocator for DeviceType {@code t}. The passed in allocator pointer is
- *  expected to have static lifetime; this function does NOT take ownership
- *  of the raw pointer. (The reason for this is to prevent existing pointers
- *  to an allocator of a particular device from being invalidated when
- *  SetAllocator is called.)
- *
- *  Also note that this is not thread-safe, and we assume this function will
- *  only be called during initialization.
- *
- *  The 'priority' flag is introduced when we want to overwrite the default
- *  allocator, since the allocators are set statically. The default priority
- *  is 0, which means the lowest. Only higher or equal priority can overwrite
- *  existing ones.
- */
-
-// #define REGISTER_ALLOCATOR(t, f)
-//   namespace {
-//   static AllocatorRegisterer<t> g_allocator_d(f);
-//   }
-// Targeting ../MemoryReportingInfoBase.java
-
-
-
- // namespace c10
-
-
-// Parsed from c10/core/QEngine.h
-
-// #pragma once
-
-// #include <c10/core/DeviceType.h>
-// #include <c10/core/DispatchKey.h>
-// #include <c10/util/Exception.h>
-
-/**
- * QEngine is an enum that is used to select the engine to run quantized ops.
- * Keep this enum in sync with get_qengine_id() in
- * torch/backends/quantized/__init__.py
- */
-@Namespace("c10") public enum QEngine {
-  NoQEngine((byte)0),
-  FBGEMM((byte)1),
-  QNNPACK((byte)2);
-
-    public final byte value;
-    private QEngine(byte v) { this.value = v; }
-    private QEngine(QEngine e) { this.value = e.value; }
-    public QEngine intern() { for (QEngine e : values()) if (e.value == value) return e; return this; }
-    @Override public String toString() { return intern().name(); }
-}
-
-
-
-
-
-@Namespace("c10") public static native @StdString BytePointer toString(QEngine qengine);
-
- // namespace c10
-
-
-// Parsed from c10/core/Backend.h
-
-// #pragma once
-
-// #include <c10/core/DeviceType.h>
-// #include <c10/core/DispatchKey.h>
-// #include <c10/util/Exception.h>
-
-// #include <stdexcept>
-
-/**
- * This legacy enum class defines the set of backends supported by old school,
- * code generated Type-based ATen.  A "backend" in this sense roughly
- * corresponds to the cartesian product of (device type, layout), but restricted
- * only to combinations which we actually have kernels for.  Backend does NOT
- * include dtype.
- *
- * The reason we are sunsetting this enum class is because it doesn't allow for
- * open registration; e.g., if you want to add SparseXLA, you'd have to
- * edit this enum; you wouldn't be able to do it out of tree.  DispatchKey is
- * the replacement for Backend which supports open registration.
- *
- * NB: The concept of 'Backend' here disagrees with the notion of backend
- * exposed to users in torch.backends.  Backend here is something like "CPU"
- * or "SparseCUDA"; backend in torch.backends is something like "MKL" or
- * "CUDNN".
- */
-@Namespace("c10") public enum Backend {
-  CPU(0),
-  CUDA(1),
-  HIP(2),
-  FPGA(3),
-  SparseCPU(4),
-  SparseCUDA(5),
-  SparseHIP(6),
-  MSNPU(7),
-  XLA(8),
-  Vulkan(9),
-  QuantizedCPU(10),
-  QuantizedCUDA(11),
-  Undefined(12),
-  MkldnnCPU(13),
-  NumOptions(14);
-
-    public final int value;
-    private Backend(int v) { this.value = v; }
-    private Backend(Backend e) { this.value = e.value; }
-    public Backend intern() { for (Backend e : values()) if (e.value == value) return e; return this; }
-    @Override public String toString() { return intern().name(); }
-}
-
-@Namespace("c10") public static native Backend toSparse(Backend b);
-
-@Namespace("c10") public static native Backend toDense(Backend b);
-
-@Namespace("c10") public static native @Cast("c10::DeviceType") short backendToDeviceType(Backend b);
-
-@Namespace("c10") public static native Backend backendToCPU(Backend b);
-
-@Namespace("c10") public static native Backend backendToCUDA(Backend b);
-
-@Namespace("c10") public static native Backend backendToHIP(Backend b);
-
-// TODO: This probably shouldn't actually be static inline
-@Namespace("c10") public static native @Cast("const char*") BytePointer toString(Backend b);
-
-@Namespace("c10") public static native @Cast("bool") boolean isSparse(Backend b);
-
- // namespace c10
 
 
 // Parsed from c10/core/ScalarType.h
@@ -452,16 +293,16 @@ public static final short
 //   _(c10::complex<float>, ComplexFloat)
 //   _(c10::complex<double>, ComplexDouble)
 
-@Namespace("c10") public static native @ByVal TypeMeta scalarTypeToTypeMeta(ScalarType scalar_type);
+@Namespace("c10") public static native @ByVal @Cast("caffe2::TypeMeta*") Pointer scalarTypeToTypeMeta(ScalarType scalar_type);
 
 @Namespace("c10") public static native @ByVal @Cast("c10::optional<c10::ScalarType>*") Pointer tryTypeMetaToScalarType(
-    @ByVal TypeMeta dtype);
+    @ByVal @Cast("caffe2::TypeMeta*") Pointer dtype);
 
-@Namespace("c10") public static native ScalarType typeMetaToScalarType(@ByVal TypeMeta dtype);
+@Namespace("c10") public static native ScalarType typeMetaToScalarType(@ByVal @Cast("caffe2::TypeMeta*") Pointer dtype);
 
-@Namespace("c10") public static native @Cast("bool") @Name("operator ==") boolean equals(ScalarType t, @ByVal TypeMeta m);
+@Namespace("c10") public static native @Cast("bool") @Name("operator ==") boolean equals(ScalarType t, @ByVal @Cast("caffe2::TypeMeta*") Pointer m);
 
-@Namespace("c10") public static native @Cast("bool") @Name("operator ==") boolean equals(@ByVal TypeMeta m, ScalarType t);
+@Namespace("c10") public static native @Cast("bool") @Name("operator ==") boolean equals(@ByVal @Cast("caffe2::TypeMeta*") Pointer m, ScalarType t);
 
 // #define DEFINE_CONSTANT(_, name)
 //   constexpr ScalarType k##name = ScalarType::name;
@@ -518,1042 +359,4659 @@ public static final short
 
 @Namespace("c10") public static native @Cast("std::ostream*") @ByRef @Name("operator <<") Pointer shiftLeft(
     @Cast("std::ostream*") @ByRef Pointer stream,
-    @ByVal ScalarType scalar_type);
+    ScalarType scalar_type);
 
  // namespace c10
 
 
-// Parsed from c10/core/DispatchKey.h
+// Parsed from torch/csrc/api/include/torch/expanding_array.h
 
 // #pragma once
 
-// #include <iostream>
-// #include <string>
-// #include <c10/macros/Macros.h>
-
-// Semantically, a dispatch key identifies a possible "level" in our
-// dispatch, for which a handler may be registered.  Traditional
-// backends like CPU and CUDA get dispatch keys; however, so do
-// "wrapping" layers like Variable (for autograd handling).
-//
-// In implementation terms, the dispatch key identifies a specific "bit" in a
-// DispatchKeySet.  Higher bit indexes get handled by dispatching first (because
-// we "count leading zeros" when we extract the highest priority dispatch
-// key.)
-
-
-// Note [Private use DispatchKey]
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~
-// Private use tensor IDs are preallocated tensor type IDs for use in user
-// applications.  Similar to private use fields in HTTP, they can be used
-// by end users for experimental or private applications, without needing
-// to "standardize" the tensor ID (which would be done by submitting a PR
-// to PyTorch to add your type ID).
-//
-// Private use tensor IDs are appropriate to use if you want to experiment
-// with adding a new tensor type (without having to patch PyTorch first) or
-// have a private, non-distributed application that needs to make use of a
-// new tensor type.  Private use tensor IDs are NOT appropriate to use for
-// libraries intended to be distributed to further users: please contact
-// the PyTorch developers to get a type ID registered in this case.
-//
-// We provide two classes of private user tensor id: regular DispatchKeys
-// and PreAutograd DispatchKeys.  DispatchKeys serve the role of ordinary "backend"
-// DispatchKeys; if you were adding support for a new type of accelerator, you
-// would use a DispatchKey, and reuse autograd definitions already defined in
-// PyTorch for operators you define.  PreAutograd DispatchKeys serve as "wrapper"
-// DispatchKeys: they are most appropriate for tensors that compose multiple
-// internal tensors, and for cases when the built-in autograd formulas for
-// operators are not appropriate.
-
-// These are some convenience identifiers for dispatch keys which are
-// shorter to type than their long counterparts.  Note that some of these
-// dispatch keys directly correspond to DeviceType; and most APIs that
-// accept DispatchKey also accept DeviceType; e.g.,
-// torch::dispatch(torch::kCPU, ...) is also valid.
-
- // namespace c10
-  // Expose the constant, but not the TYPE (DispatchKey is an implementation
-  // detail!)
-
-// Targeting ../DispatchKeyMap.java
-
-
-
-
-
-// Parsed from c10/core/DispatchKeySet.h
-
-// #pragma once
-
-// #include <c10/core/DispatchKey.h>
-// #include <c10/util/llvmMathExtras.h>
-// #include <c10/util/Exception.h>
-// #include <ostream>
-
-// A representation of a set of DispatchKeys.  A tensor may have multiple
-// tensor type ids, e.g., a Variable tensor can also be a CPU tensor; the
-// DispatchKeySet specifies what type ids apply.  The internal representation is
-// as a 64-bit bit set (this means only 64 tensor type ids are supported).
-//
-// Note that DispatchKeys are ordered; thus, we can ask questions like "what is
-// the highest priority DispatchKey in the set"?  (The set itself is not
-// ordered; two sets with the same ids will always have the ids ordered in the
-// same way.)
-//
-// At the moment, there are no nontrivial uses of this set; tensors are always
-// singletons.  In the near future, this set will represent variable? + tensor
-// type id.  In the far future, it will be requires grad? + profiling? +
-// tracing? + lazy? + tensor type id.
-//
-// (The difference between variable and requires grad, is that
-// there are currently three states a tensor can be:
-//  1. Not a variable
-//  2. Variable with requires_grad=False
-//  3. Variable with requires_grad=True
-// Eventually, we want to kill state (1), and only dispatch to autograd
-// handling code if one of the inputs requires grad.)
-//
-// An undefined tensor is one with an empty tensor type set.
-@Namespace("c10") public static native @Cast("std::ostream*") @ByRef @Name("operator <<") Pointer shiftLeft(@Cast("std::ostream*") @ByRef Pointer arg0, @ByVal @Cast("c10::DispatchKeySet*") Pointer arg1);
-
-// Historically, every tensor only had a single DispatchKey, and it was always
-// something like CPU, and there wasn't any of this business where TLS
-// could cause the DispatchKey of a tensor to change.  But we still have some
-// legacy code that is still using DispatchKey for things like instanceof
-// checks; if at all possible, refactor the code to stop using DispatchKey in
-// those cases.
-
-// For backwards compatibility with XLA repository
-// (I don't want to fix this in XLA right now because there might be
-// more renaming coming in the future.)
-@Namespace("c10") public static native @ByVal @Cast("c10::DispatchKeySet*") Pointer XLA();
-
-
-
-
-// Parsed from c10/core/DefaultDtype.h
-
-// #pragma once
-
-// #include <c10/macros/Macros.h>
-// Targeting ../TypeMeta.java
-
-
- // namespace caffe2
-@Namespace("c10") public static native @Const @ByRef TypeMeta get_default_dtype();
-@Namespace("c10") public static native @Const @ByRef TypeMeta get_default_complex_dtype();
- // namespace c10
-
-
-// Parsed from c10/core/Stream.h
-
-// #pragma once
-
-// #include <c10/core/Device.h>
-
-/** An index representing a specific stream.  A StreamId is not independently
- *  meaningful without knowing the Device it is associated with; try to
- *  use Stream rather than StreamId directly.
- * 
- *  StreamIds are opaque; they are assigned by some DeviceType-specific
- *  numbering system which is not visible to the user.  HOWEVER, we
- *  guarantee that StreamId 0 is always a valid stream, and corresponds
- *  to some sort of "default" stream. */
-// Targeting ../Stream.java
-
-
-
-@Namespace("c10") public static native @Cast("std::ostream*") @ByRef @Name("operator <<") Pointer shiftLeft(@Cast("std::ostream*") @ByRef Pointer stream, @Const @ByRef Stream s);
-
-
-// Targeting ../StreamMap.java
-
-
- // namespace std
-
-
-// Parsed from c10/core/impl/DeviceGuardImplInterface.h
-
-// #pragma once
-
-// #include <c10/core/Device.h>
-// #include <c10/core/DeviceType.h>
-// #include <c10/core/Stream.h>
-// #include <c10/util/Exception.h>
-
-// Just for C10_ANONYMOUS_VARIABLE
-// #include <c10/util/Registry.h>
-
-// #include <atomic>
-
-/**
- * Flags defining the behavior of events.
- *
- * PYTORCH_DEFAULT and BACKEND_DEFAULT are valid for all backends. The
- * BACKEND_DEFAULT is what a particular backend would select if no
- * flags were given. PYTORCH_DEFAULT is the PyTorch's framework default
- * choice for events on that backend, which may not be the same. For example,
- * when PyTorch creates a CUDA event it sets the flag
- * CUDA_EVENT_DISABLING_TIMING by default to improve performance.
- *
- * The mapping of PYTORCH_DEFAULT and BACKEND_DEFAULT is done by each
- * backend implementation. Backend-specific flags, like CUDA_EVENT_DEFAULT,
- * should map one-to-one with actual event flags for those backends.
- */
-@Namespace("c10") public enum EventFlag {
-    PYTORCH_DEFAULT(0),
-    BACKEND_DEFAULT(1),
-    // CUDA flags
-    CUDA_EVENT_DEFAULT(2),
-    CUDA_EVENT_DISABLE_TIMING(3), // PyTorch-default for CUDA
-    // HIP flags
-    HIP_EVENT_DEFAULT(4),
-    HIP_EVENT_DISABLE_TIMING(5), // PyTorch-default for HIP
-    // FOR TESTING ONLY
-    INVALID(6);
-
-    public final int value;
-    private EventFlag(int v) { this.value = v; }
-    private EventFlag(EventFlag e) { this.value = e.value; }
-    public EventFlag intern() { for (EventFlag e : values()) if (e.value == value) return e; return this; }
-    @Override public String toString() { return intern().name(); }
-}
-// Targeting ../DeviceGuardImplInterface.java
-
-
-
-// The registry is NON-owning.  Each stored pointer is std::atomic so
-// that under all interleavings of registry calls the structure is
-// race-free.  This doesn't cost us anything on reads in X86.  (An
-// unsynchronized implementation probably is OK too, but I didn't want
-// to prove that we never read from device_guard_impl_registry at the
-// same time some registration is occurring.  Shiver.)
-//
-// I'd like this registry to be valid even at program destruction time
-// (in case someone uses a DeviceGuard in a destructor to do some cleanup
-// in the CUDA API.)  Since there are no direct accesses of the underlying
-// owning objects which I can use to enforce initialization order (unlike
-// in a Meyer singleton), it implies that you must *leak* objects when
-// putting them in the registry.  This is done by deleting the destructor
-// on DeviceGuardImplInterface.
-// Targeting ../DeviceGuardImplRegistrar.java
-
-
-
-// #define C10_REGISTER_GUARD_IMPL(DevType, DeviceGuardImpl)
-//   static ::c10::impl::DeviceGuardImplRegistrar C10_ANONYMOUS_VARIABLE(g_##DeviceType)(::c10::DeviceType::DevType, new DeviceGuardImpl());
-
-@Namespace("c10::impl") public static native @Const DeviceGuardImplInterface getDeviceGuardImpl(@Cast("c10::DeviceType") short type);
-
-@Namespace("c10::impl") public static native @Cast("bool") boolean hasDeviceGuardImpl(@Cast("c10::DeviceType") short type);
-
- // namespace c10::impl
-
-
-// Parsed from c10/core/GeneratorImpl.h
-
-// #pragma once
-
-// #include <stdint.h>
-// #include <mutex>
-// #include <deque>
-// #include <atomic>
-// #include <typeinfo>
-// #include <utility>
-
-// #include <c10/util/Exception.h>
-// #include <c10/util/C++17.h>
-// #include <c10/util/intrusive_ptr.h>
-// #include <c10/core/Device.h>
-// #include <c10/core/DispatchKeySet.h>
-// #include <c10/util/python_stub.h>
-
-/**
- * Note [Generator]
- * ~~~~~~~~~~~~~~~~
- * A Pseudo Random Number Generator (PRNG) is an engine that uses an algorithm to
- * generate a seemingly random sequence of numbers, that may be later be used in creating
- * a random distribution. Such an engine almost always maintains a state and requires a
- * seed to start off the creation of random numbers. Often times, users have
- * found it beneficial to be able to explicitly create, retain, and destroy
- * PRNG states and also be able to have control over the seed value.
- *
- * A Generator in ATen gives users the ability to read, write and modify a PRNG engine.
- * For instance, it does so by letting users seed a PRNG engine, fork the state of the
- * engine, etc.
- *
- * By default, there is one generator per device, and a device's generator is
- * lazily created. A user can use the torch.Generator() api to create their own generator.
- * Currently torch.Generator() can only create a CPUGeneratorImpl.
- */
-
-/**
- * Note [Acquire lock when using random generators]
- * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
- * Generator and its derived classes are NOT thread-safe. Please note that most of the
- * places where we have inserted locking for generators are historically based, and we
- * haven't actually checked that everything is truly thread safe (and it probably isn't).
- * Please use the public mutex_ when using any methods from these classes, except for the
- * read-only methods. You can learn about the usage by looking into the unittests
- * (aten/src/ATen/cpu_generator_test.cpp) and other places where we have used lock_guard.
- * 
- * TODO: Look into changing the threading semantics of Generators in ATen (e.g., making
- * them non-thread safe and instead making the generator state splittable, to accommodate
- * forks into other threads).
- */
-
-// The default seed is selected to be a large number
-// with good distribution of 0s and 1s in bit representation
-@Namespace("c10") @MemberGetter public static native @Cast("const uint64_t") long default_rng_seed_val();
-// Targeting ../GeneratorImpl.java
-
-
-
- // namespace detail
-
- // namespace c10
-
-
-// Parsed from c10/core/MemoryFormat.h
-
-// #pragma once
-
-// #include <c10/core/Backend.h>
-// #include <c10/util/Exception.h>
 // #include <c10/util/ArrayRef.h>
-
-// #include <iostream>
-
-// Memory format is not the property of a Tensor. It is the way to tell an
-// operator how the result should be organized in memory and nothing more. That
-// means memory format should never be used as return value for any tensor state
-// interrogation functions (internally and externally).
-//
-// Possible options are:
-//  Preserve:
-//    If any of the input tensors is in channels_last format, operator output
-//    should be in channels_last format
-//
-//  Contiguous:
-//    Regardless of input tensors format, the output should be contiguous Tensor.
-//
-//  ChannelsLast:
-//    Regardless of input tensors format, the output should be in channels_last format.
-@Namespace("c10") public enum MemoryFormat { Contiguous((byte)0), Preserve((byte)1), ChannelsLast((byte)2), ChannelsLast3d((byte)3);
-
-    public final byte value;
-    private MemoryFormat(byte v) { this.value = v; }
-    private MemoryFormat(MemoryFormat e) { this.value = e.value; }
-    public MemoryFormat intern() { for (MemoryFormat e : values()) if (e.value == value) return e; return this; }
-    @Override public String toString() { return intern().name(); }
-}
-
-// If you are seeing this, it means that this call site was not checked if
-// the memory format could be preserved, and it was switched to old default
-// behaviour of contiguous
-// #define LEGACY_CONTIGUOUS_MEMORY_FORMAT c10::get_contiguous_memory_format()
-
-@Namespace("c10") public static native MemoryFormat get_contiguous_memory_format();
-
-// Note: Hardcoded the channel last stride indices here to get better performance
-@Namespace("c10") public static native @Cast("int64_t*") @StdVector LongPointer get_channels_last_strides_2d(@ByVal @Cast("c10::IntArrayRef*") Pointer sizes);
-
-@Namespace("c10") public static native @Cast("int64_t*") @StdVector LongPointer get_channels_last_strides_3d(@ByVal @Cast("c10::IntArrayRef*") Pointer sizes);
-
-// NOTE:
-// Below are Helper functions for is_channels_last_strides_xd.
-// 1. Please do not combine these helper functions, each helper function handles
-// exactly one case of sizes + memory_format, by doing this, the strides indices
-// will be a constant array and we can access it using constant index number,
-// the complier will fully unroll the loop on strides indices to gain a better
-// performance.
-// 2. No error check in helper function, caller ensures the correctness of the input
-// 3. All helper functions have similar comments, only 1st helper function is commented here.
-@Namespace("c10") public static native @Cast("bool") boolean is_channels_last_strides_2d_s4(@ByVal @Cast("const c10::IntArrayRef*") Pointer sizes, @ByVal @Cast("const c10::IntArrayRef*") Pointer strides);
-
-@Namespace("c10") public static native @Cast("bool") boolean is_channels_last_strides_3d_s5(@ByVal @Cast("const c10::IntArrayRef*") Pointer sizes, @ByVal @Cast("const c10::IntArrayRef*") Pointer strides);
-
-// Note [Ambiguous is_channels_last_strides_xd]
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-// The flaw of carrying memory_format implicitly through strides is very hard
-// to WAR properly. issue #24090
-// Without the history of permutation, we can't infer the memory_format of a
-// tensor from the snapshot of its size & stride
-// e.g.
-//
-// 1. We can NOT specify the memory_format of N111 tensor through strides in a
-//  meaningful way;
-//
-// 2. Two path that ended up with identical size/stride
-//  N11W contiguous tensor sliced at w-dimension becomes [N,1,1,1]@[W,W,W,W]
-//  NC11 channels_last tensor sliced at c-dimension becomes [N,1,1,1]@[C,C,C,C]
-//    So if we see a tensor [N,1,1,1]@[X,X,X,X], there's no way for us to infer
-//    the memory_format of the original tensor.
-//
-// Due to the limitations, our temporary WAR `is_channels_last_strides` does the
-// best effort to infer whether the original memory_format of a tensor is
-// at::MemoryFormat::ChannelsLast. The two objectives of this function (ordered
-// by their importance):
-//   1. Ensure that normal shape manipulation does not accidentally change the
-//      MemoryFormat of an existing tensor.
-//   2. Allows user to mark MemoryFormat::ChannelsLast to tensors;
-//
-// The function does so via checking strides of the tensor, including strides of
-// size-1 dimensions. Although conventionally PyTorch implies no restriction on
-// trivial stride (stride for size-1 dimension).
-//
-// Note that this approach is a compromise. We did not solve the problem
-// completely. Many cases we will not be able to infer the correct memory
-// format.
-// The implementation of `is_channels_last_strides` is to serve the objectives:
-// MemoryFormat::ChannelsLast has to be explicitly opted-in (no accidental
-// conversion); Best effort to maintain the ChannelsLast flag.
-//
-// Due to the fact that this is not a bulletproof solution, through testing
-// (aten/src/ATen/test/memory_format_test.cpp)
-//   a. we ensure that the common tasks are supported;
-//   a. we identify corner cases where the implementation compromises on.
-//
-// By the time accumulated permutation is enabled to replace implicit
-// memory_foramt through strides, we should be updating our tests and fix the
-// issues in our tests.
-//
-// We use Channels Last 2d as an example above.
-// This is a general problem for all the is_channels_last_strides_xd implementation.
-// Please check the helper functions (is_channels_last_strides_*d_s*) for more details.
-
-@Namespace("c10") public static native @Cast("bool") boolean is_channels_last_strides_2d(@ByVal @Cast("const c10::IntArrayRef*") Pointer sizes, @ByVal @Cast("const c10::IntArrayRef*") Pointer strides);
-
-@Namespace("c10") public static native @Cast("bool") boolean is_channels_last_strides_3d(@ByVal @Cast("const c10::IntArrayRef*") Pointer sizes, @ByVal @Cast("const c10::IntArrayRef*") Pointer strides);
-
- // namespace c10
-
-
-// Parsed from c10/core/Storage.h
-
-// #pragma once
-
-// #include <c10/core/StorageImpl.h>
-
- // namespace c10
-
-
-// Parsed from c10/core/Layout.h
-
-// #pragma once
-
-// #include <c10/core/Backend.h>
-// #include <c10/util/Exception.h>
-
-// #include <iostream>
-@Namespace("c10") public enum Layout { Strided((byte)0), Sparse((byte)1), Mkldnn((byte)2), NumOptions((byte)3);
-
-    public final byte value;
-    private Layout(byte v) { this.value = v; }
-    private Layout(Layout e) { this.value = e.value; }
-    public Layout intern() { for (Layout e : values()) if (e.value == value) return e; return this; }
-    @Override public String toString() { return intern().name(); }
-}
-
-
-
-
-
-@Namespace("c10") public static native Layout layout_from_backend(Backend backend);
-
-@Namespace("c10") public static native @Cast("std::ostream*") @ByRef @Name("operator <<") Pointer shiftLeft(@Cast("std::ostream*") @ByRef Pointer stream, @ByVal Layout layout);
-
- // namespace c10
-
-
-// Parsed from c10/core/QScheme.h
-
-// #pragma once
-
-// #include <c10/core/DeviceType.h>
-// #include <c10/util/Exception.h>
-
-/**
- * QScheme is an enum that specifies the type of quantization. This has a one
- * to one correspondence with Quantizer
- * Please refer to ATen/quantized/Quantizer.h to see the Quantizers classes.
- * Keep this file in sync with torch/nn/_qscheme.py
- */
-@Namespace("c10") public enum QScheme {
-  PER_TENSOR_AFFINE((byte)0),
-  PER_CHANNEL_AFFINE((byte)1),
-  PER_TENSOR_SYMMETRIC((byte)2),
-  PER_CHANNEL_SYMMETRIC((byte)3),
-  COMPILE_TIME_NUM_QSCHEMES((byte)4);
-
-    public final byte value;
-    private QScheme(byte v) { this.value = v; }
-    private QScheme(QScheme e) { this.value = e.value; }
-    public QScheme intern() { for (QScheme e : values()) if (e.value == value) return e; return this; }
-    @Override public String toString() { return intern().name(); }
-}
-
-
-
-
-
-@Namespace("c10") @MemberGetter public static native int COMPILE_TIME_NUM_QSCHEMES();
-
-@Namespace("c10") public static native @StdString BytePointer toString(QScheme qscheme);
-
- // namespace c10
-
-
-// Parsed from c10/core/TensorImpl.h
-
-// #pragma once
-
-// #include <atomic>
-// #include <memory>
-// #include <numeric>
-
-// #include <c10/core/Backend.h>
-// #include <c10/core/MemoryFormat.h>
-// #include <c10/core/Storage.h>
-// #include <c10/core/TensorOptions.h>
-// #include <c10/core/DispatchKeySet.h>
-// #include <c10/core/impl/LocalDispatchKeySet.h>
-// #include <c10/core/CopyBytes.h>
-
 // #include <c10/util/Exception.h>
 // #include <c10/util/Optional.h>
-// #include <c10/util/Flags.h>
-// #include <c10/util/Logging.h>
-// #include <c10/util/python_stub.h>
 
-// A global boolean variable to control whether we free memory when a Tensor
-// is shrinked to a smaller size. As a result, a Tensor is always going to
-// keep the memory allocated for its maximum capacity reshaped to so far.
-//
-// This parameter is respected "upper-case" methods which call Resize()
-// (e.g., CopyFrom, ResizeLike); it is NOT respected by Tensor::resize_
-// or ShrinkTo, both of which guarantee to never to free memory.
-
-
-// Since we can have high variance in blob memory allocated across different
-// inputs in the same run, we will shrink the blob only if the memory gain
-// is larger than this flag in bytes.  This only applies to functions which
-// respect caffe2_keep_on_shrink.
-
-
-// Targeting ../Scalar.java
-
-
-
-/**
- * A utility function to convert vector<int> to vector<int64_t>.
- */
-
-
-/**
- * Return product of all dimensions starting from k
- */
-@Namespace("c10") public static native @Cast("int64_t") long size_from_dim_(int k, @ByVal @Cast("c10::IntArrayRef*") Pointer dims);
-
-// Product of all dims up to k (not including dims[k])
-@Namespace("c10") public static native @Cast("int64_t") long size_to_dim_(int k, @ByVal @Cast("c10::IntArrayRef*") Pointer dims);
-
-// Product of all dims between k and l (not including dims[k] and dims[l])
-@Namespace("c10") public static native @Cast("int64_t") long size_between_dim_(int k, int l, @ByVal @Cast("c10::IntArrayRef*") Pointer dims);
-
-// Wrap around axis_index if it is negative, s.t., -1 is the last dim
-@Namespace("c10") public static native int canonical_axis_index_(int axis_index, int ndims);
-// Targeting ../PlacementDtor.java
-
-
-
-/*
- * A Context that will call extra placement deleter during
- * deconstruction.
- *
- * Accept a already constructed DataPtr and store it as member
- * during destruction, we'll call extra deleter on the underlying
- * data pointer before the DataPtr is destructed.
- * `data_ptr_` owns the memory.
- */
-// Targeting ../AutogradMetaInterface.java
-
-
-// Targeting ../AutogradMetaFactory.java
-
-
-// Targeting ../AutogradMetaFactoryRegisterer.java
-
-
-
- // namespace impl
-// Targeting ../VariableVersion.java
-
-
-// Targeting ../TensorImpl.java
-
-
-
-// Note [TensorImpl size constraints]
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-// Changed the size of TensorImpl?  If the size went down, good for
-// you!  Adjust the documentation below and the expected size.
-// Did it go up?  Read on...
-//
-// Struct size matters.  In some production systems at Facebook, we have
-// 400M live tensors during a training run.  Do the math: every 64-bit
-// word you add to Tensor is an extra 3.2 gigabytes in RAM.
-//
-// If you are a Facebook employee, you can check if the run in question
-// has tipped you over the point using the command here:
-// https://fburl.com/q5enpv98
-//
-// For reference, we OOMed at 160 bytes (20 words) per TensorImpl.
-// This is not counting overhead from strides out-of-line allocation and
-// StorageImpl space and this is from before we inlined sizes and strides
-// directly into TensorImpl as SmallVectors.
-//
-// Our memory usage on 32-bit systems is suboptimal, but we're not checking
-// for it at the moment (to help avoid rage inducing cycles when the
-// 32-bit number is wrong).
-//
-// Current breakdown:
-//
-//    vtable pointer
-//    strong refcount           TODO: pack these into one word
-//    weak refcount
-//    storage pointer
-//    autograd metadata pointer
-//    version counter pointer
-//    PyObject pointer
-//    sizes SmallVector (begin)
-//    sizes SmallVector (end)
-//    sizes SmallVector (capacity)
-//    sizes SmallVector (pre-allocated 0)
-//    sizes SmallVector (pre-allocated 1)
-//    sizes SmallVector (pre-allocated 2)
-//    sizes SmallVector (pre-allocated 3)
-//    sizes SmallVector (pre-allocated 4)
-//    strides SmallVector (begin)
-//    strides SmallVector (end)
-//    strides SmallVector (capacity)
-//    strides SmallVector (pre-allocated 0)
-//    strides SmallVector (pre-allocated 1)
-//    strides SmallVector (pre-allocated 2)
-//    strides SmallVector (pre-allocated 3)
-//    strides SmallVector (pre-allocated 4)
-//    storage offset
-//    numel
-//    data type pointer
-//    (optional) device
-//    tensor type id
-//    miscellaneous bitfield
-//
- // namespace c10
-
-
-// Parsed from ATen/detail/HIPHooksInterface.h
-
-// #pragma once
-
-// #include <c10/core/Allocator.h>
-// #include <ATen/core/Generator.h>
-// #include <c10/util/Exception.h>
-
-// #include <c10/util/Registry.h>
-
-// #include <cstddef>
-// #include <functional>
-// #include <memory>
-// Targeting ../THHState.java
-
-
-
-
-// NB: Class must live in `at` due to limitations of Registry.h.
-// Targeting ../HIPHooksInterface.java
-
-
-// Targeting ../HIPHooksArgs.java
-
-
-
-
-// #define REGISTER_HIP_HOOKS(clsname)
-//   C10_REGISTER_CLASS(HIPHooksRegistry, clsname, clsname)
-
- // namespace detail
- // namespace at
-
-
-// Parsed from ATen/detail/CUDAHooksInterface.h
-
-// #pragma once
-
-// #include <c10/core/Allocator.h>
-// #include <ATen/core/Generator.h>
-// #include <c10/util/Exception.h>
-// #include <c10/util/Optional.h>
-// #include <c10/util/Registry.h>
-
-// #include <cstddef>
-// #include <functional>
-// #include <memory>
-// Targeting ../THCState.java
-
-
-// Targeting ../NVRTC.java
-
-
- // at::cuda
-
-
-// NB: Class must live in `at` due to limitations of Registry.h.
-
-// #ifdef _MSC_VER
-@Namespace("at") @MemberGetter public static native @Cast("const char*") BytePointer CUDA_HELP();
-// #else
-// Targeting ../CUDAHooksInterface.java
-
-
-// Targeting ../CUDAHooksArgs.java
-
-
-
-
-// #define REGISTER_CUDA_HOOKS(clsname)
-//   C10_REGISTER_CLASS(CUDAHooksRegistry, clsname, clsname)
- // namespace detail
- // namespace at
-
-
-// Parsed from ATen/detail/CPUGuardImpl.h
-
-// #pragma once
-
-// #include <c10/core/impl/DeviceGuardImplInterface.h>
-// #include <c10/macros/Macros.h>
-// Targeting ../CPUGuardImpl.java
-
-
-
- // namespace at::detail
-
-
-// Parsed from ATen/core/Dimname.h
-
-// #pragma once
-
-// #include <ATen/core/interned_strings.h>
-// #include <c10/util/ArrayRef.h>
-// #include <c10/util/Optional.h>
-// #include <ostream>
-
-/** enum class at::NameType */
-public static final byte BASIC = (byte)0, WILDCARD = (byte)1;
-// Targeting ../Dimname.java
-
-
-
-@Namespace("at") public static native @Cast("std::ostream*") @ByRef @Name("operator <<") Pointer shiftLeft(@Cast("std::ostream*") @ByRef Pointer out, @Const @ByRef Dimname dimname);
-
-@Namespace("at") public static native @Cast("bool") @Name("operator ==") boolean equals(@Const @ByRef Dimname lhs, @Const @ByRef Dimname rhs);
-
-@Namespace("at") public static native @Cast("bool") @Name("operator !=") boolean notEquals(@Const @ByRef Dimname lhs, @Const @ByRef Dimname rhs);
-
- // namespace at
-
-
-// Parsed from ATen/core/DeprecatedTypePropertiesRegistry.h
-
-// #pragma once
-
-// In order to preserve bc, we make DeprecatedTypeProperties instances unique
-// just like they are for Type.
-
-// #include <c10/core/Backend.h>
-// #include <c10/core/ScalarType.h>
-// Targeting ../DeprecatedTypeProperties.java
-
-
-// Targeting ../DeprecatedTypePropertiesDeleter.java
-
-
-
- // namespace at
-
-
-// Parsed from ATen/core/Generator.h
-
-// #pragma once
-
-// #include <stdint.h>
-// #include <mutex>
-// #include <deque>
-// #include <atomic>
-// #include <typeinfo>
-// #include <utility>
-// #include <cstddef>
-
-// #include <c10/util/Exception.h>
-// #include <c10/util/C++17.h>
-// #include <c10/util/intrusive_ptr.h>
-// #include <c10/core/Device.h>
-// #include <c10/core/DispatchKeySet.h>
-// #include <c10/core/GeneratorImpl.h>
-// Targeting ../Generator.java
-
-
-
- // namespace at
-
-
-
-// Parsed from ATen/Context.h
-
-// #pragma once
-
-// #include <ATen/core/ATenGeneral.h>
-// #include <ATen/Tensor.h>
-// #include <ATen/Utils.h>
-// #include <ATen/core/ATenGeneral.h>
-// #include <ATen/core/Generator.h>
-// #include <ATen/CPUGeneratorImpl.h>
-// #include <ATen/core/LegacyTypeDispatch.h>
-// #include <ATen/detail/CUDAHooksInterface.h>
-// #include <ATen/detail/HIPHooksInterface.h>
-// #include <c10/util/Exception.h>
-// #include <c10/core/impl/DeviceGuardImplInterface.h>
-// #include <c10/core/QEngine.h>
-
-// #include <memory>
-// #include <mutex>
+// #include <algorithm>
+// #include <array>
 // #include <cstdint>
-// Targeting ../Context.java
+// #include <initializer_list>
+// #include <string>
+// #include <vector>
+// Targeting ../ExpandingArray1.java
+
+
+// Targeting ../ExpandingArray2.java
+
+
+// Targeting ../ExpandingArray3.java
+
+
+// Targeting ../ExpandingArray4.java
+
+
+// Targeting ../ExpandingArray5.java
+
+
+// Targeting ../ExpandingArrayWithOptionalElem1.java
+
+
+// Targeting ../ExpandingArrayWithOptionalElem2.java
+
+
+// Targeting ../ExpandingArrayWithOptionalElem3.java
+
+
+// Targeting ../ExpandingArrayWithOptionalElem4.java
+
+
+// Targeting ../ExpandingArrayWithOptionalElem5.java
 
 
 
-@Namespace("at") public static native void init();
-
-@Namespace("at") public static native @ByRef DeprecatedTypeProperties getDeprecatedTypeProperties(@ByVal Backend p, @ByVal ScalarType s);
-
-@Namespace("at") public static native @ByRef DeprecatedTypeProperties CPU(@ByVal ScalarType s);
-
-@Namespace("at") public static native @ByRef DeprecatedTypeProperties CUDA(@ByVal ScalarType s);
-
-@Namespace("at") public static native @ByRef DeprecatedTypeProperties HIP(@ByVal ScalarType s);
-
-@Namespace("at") public static native @Cast("bool") boolean hasCUDA();
-
-@Namespace("at") public static native @Cast("bool") boolean hasHIP();
-
-@Namespace("at") public static native @Cast("bool") boolean hasXLA();
-
-// Despite its name, this function returns the number of *CUDA* GPUs.
-@Namespace("at") public static native @Cast("size_t") long getNumGPUs();
-
-@Namespace("at") public static native @Cast("bool") boolean hasOpenMP();
-
-@Namespace("at") public static native @Cast("bool") boolean hasMKL();
-
-@Namespace("at") public static native @Cast("bool") boolean hasLAPACK();
-
-@Namespace("at") public static native @Cast("bool") boolean hasMAGMA();
-
-@Namespace("at") public static native @Cast("bool") boolean hasMKLDNN();
-
-@Namespace("at") public static native void manual_seed(@Cast("uint64_t") long seed);
-
- // namespace at
+ // namespace torch
 
 
-// Parsed from ATen/ATen.h
-
-// #pragma once
-
-// #include <c10/core/Allocator.h>
-// #include <ATen/core/ATenGeneral.h>
-// #include <ATen/Context.h>
-// #include <ATen/Device.h>
-// #include <ATen/DeviceGuard.h>
-// #include <ATen/DimVector.h>
-// #include <ATen/Dispatch.h>
-// #include <ATen/DynamicLibrary.h>
-// #include <ATen/Formatting.h>
-// #include <ATen/Functions.h>
-// #include <ATen/NamedTensor.h>
-// #include <ATen/ScalarOps.h>
-// #include <ATen/Tensor.h>
-// #include <ATen/TensorGeometry.h>
-// #include <ATen/TensorIndexing.h>
-// #include <ATen/TensorOperators.h>
-// #include <ATen/Version.h>
-// #include <ATen/core/ATenGeneral.h>
-// #include <ATen/core/Generator.h>
-// #include <c10/core/Layout.h>
-// #include <ATen/core/Scalar.h>
-// #include <c10/core/Storage.h>
-// #include <c10/core/TensorOptions.h>
-// #include <ATen/core/Reduction.h>
-// #include <c10/util/Exception.h>
-// #include <ATen/core/UnsafeFromTH.h>
-// #include <ATen/core/ivalue.h>
-
-
-// Parsed from ATen/Tensor.h
+// Parsed from torch/csrc/api/include/torch/cuda.h
 
 // #pragma once
 
-// #include <ATen/core/TensorBody.h>
-
-
-// Parsed from ATen/core/NamedTensor.h
-
-// #pragma once
-
-// #include <ATen/core/Dimname.h>
-// #include <c10/core/TensorImpl.h>
-// #include <c10/util/C++17.h>
-
-// XXX: This file exists because TensorImpl is in c10, but Dimname is in ATen.
-// Due to the c10/ATen library split, TensorImpl cannot depend on Dimname,
-// so we have a couple of workarounds.
-//
-// In the long term, we'll move Dimname to c10 and everything in this file
-// can be refactored out. The main blocker for that is that "c10::Symbol"
-// actually exists outside of c10 and needs to be moved in.
-
-// TensorImpl has a unique_ptr<NamedTensorMetaInterface> field.
-// XXX: Ideally we would just put optional<vector<Dimname>> into TensorImpl.
-//
-// This class has an important invariant: there must be at least ONE
-// non-wildcard
-// Targeting ../NamesMode.java
-
-
-// Targeting ../NoNamesGuard.java
-
-
-
-@Namespace("at") public static native void check_names_valid_for(@Const @ByRef Tensor tensor, @ByVal @Cast("at::DimnameList*") Pointer names);
-@Namespace("at") public static native void check_names_valid_for(@Cast("size_t") long tensor_dim, @ByVal @Cast("at::DimnameList*") Pointer names);
-
-// Sets the names of `tensor` to be `names`.
-
-@Namespace("at") @MemberGetter public static native @Cast("const size_t") long kMaxNamedTensorDim();
-
-@Namespace("at") public static native @ByVal @Cast("at::DimnameList*") Pointer default_names(@Cast("size_t") long len);
-
-// Some helper functions on TensorImpl. Useful for working with names in TH.
-// XXX: Ideally these would exist as methods on TensorImpl
-
-@Namespace("at::impl") public static native void check_names_valid_for(@Cast("at::TensorImpl*") Pointer impl, @ByVal @Cast("at::DimnameList*") Pointer names);
-
-// Returns true if the tensor's names exist and are not all 'None'.
-// Returns false if the tensor's names don't exist (were not allocated),
-// or if all names are 'None'.
-// We treat not-allocated-names the same as allocated names that are all 'None'.
-
-// Returns the names of the tensor's dimensions.
-// Unnamed tensors are treated as having 'None' in all dimension; this method
-// would return a DimnameList of all 'None's for an unnamed tensor.
-
-// This is more of an implementation detail; one should use impl::get_names /
-// Tensor::names() whenever possible because it provides a cleaner API.
-// Returns the names of the tensor if they have been allocated; returns nullopt
-// instead if the haven't been. The names of a tensor are not allocated if a
-// tensor is constructed with names=None.
-
-
- // namespace impl
-
- // namespace at
-
-
-// Parsed from ATen/core/TensorBody.h
-
-// #pragma once
-
-// #include <c10/core/Device.h>
-// #include <c10/core/Layout.h>
-// #include <c10/core/MemoryFormat.h>
-// #include <c10/core/QScheme.h>
-// #include <c10/core/Scalar.h>
-// #include <c10/core/ScalarType.h>
-// #include <c10/core/Storage.h>
-// #include <ATen/core/TensorAccessor.h>
-// #include <c10/core/TensorImpl.h>
-// #include <c10/core/UndefinedTensorImpl.h>
-// #include <c10/util/Exception.h>
-// #include <c10/util/Deprecated.h>
-// #include <c10/util/Optional.h>
-// #include <c10/util/intrusive_ptr.h>
-// #include <ATen/core/DeprecatedTypePropertiesRegistry.h>
-// #include <ATen/core/DeprecatedTypeProperties.h>
-// #include <ATen/core/NamedTensor.h>
 // #include <torch/csrc/WindowsTorchApiMacro.h>
 
-// Targeting ../TensorOptions.java
+// #include <cstddef>
+/** Returns the number of CUDA devices available. */
+@Namespace("torch::cuda") public static native @Cast("size_t") long device_count();
+
+/** Returns true if at least one CUDA device is available. */
+@Namespace("torch::cuda") public static native @Cast("bool") boolean is_available();
+
+/** Returns true if CUDA is available, and CuDNN is available. */
+@Namespace("torch::cuda") public static native @Cast("bool") boolean cudnn_is_available();
+ // namespace cuda
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/data.h
+
+// #pragma once
+
+// #include <torch/data/dataloader.h>
+// #include <torch/data/datasets.h>
+// #include <torch/data/samplers.h>
+// #include <torch/data/transforms.h>
+
+// Some "exports".
+ // namespace data
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/enum.h
+
+// #pragma once
+
+// #include <string>
+
+// #include <ATen/core/Reduction.h>
+// #include <c10/util/Exception.h>
+// #include <c10/util/variant.h>
+// #include <torch/csrc/WindowsTorchApiMacro.h>
+
+// #define TORCH_ENUM_DECLARE(name)
+// namespace torch {
+// namespace enumtype {
+//   /*
+//    NOTE: We need to provide the default constructor for each struct,
+//    otherwise Clang 3.8 would complain:
+//    ```
+//    error: default initialization of an object of const type 'const enumtype::Enum1'
+//    without a user-provided default constructor
+//    ```
+//  */
+//   struct k##name { k##name() {} };
+// }
+// TORCH_API extern const enumtype::k##name k##name;
+// }
+
+// #define TORCH_ENUM_DEFINE(name)
+// namespace torch {
+// const enumtype::k##name k##name;
+// }
+
+// #define TORCH_ENUM_PRETTY_PRINT(name)
+// std::string operator()(const enumtype::k##name& v) const {
+//   std::string k("k");
+//   return k + #name;
+// }
+
+// NOTE: Backstory on why we need the following two macros:
+//
+// Consider the following options class:
+//
+// ```
+// struct TORCH_API SomeOptions {
+//   typedef c10::variant<enumtype::kNone, enumtype::kMean, enumtype::kSum> reduction_t;
+//   SomeOptions(reduction_t reduction = torch::kMean) : reduction_(reduction) {}
+//
+//   TORCH_ARG(reduction_t, reduction);
+// };
+// ```
+//
+// and the functional that uses it:
+//
+// ```
+// Tensor some_functional(
+//     const Tensor& input,
+//     SomeOptions options = {}) {
+//   ...
+// }
+// ```
+//
+// Normally, we would expect this to work:
+//
+// `F::some_functional(input, torch::kNone)`
+//
+// However, it throws the following error instead:
+//
+// ```
+// error: could not convert `torch::kNone` from `const torch::enumtype::kNone` to `torch::nn::SomeOptions`
+// ```
+//
+// To get around this problem, we explicitly provide the following constructors for `SomeOptions`:
+//
+// ```
+// SomeOptions(torch::enumtype::kNone reduction) : reduction_(torch::kNone) {}
+// SomeOptions(torch::enumtype::kMean reduction) : reduction_(torch::kMean) {}
+// SomeOptions(torch::enumtype::kSum reduction) : reduction_(torch::kSum) {}
+// ```
+//
+// so that the conversion from `torch::kNone` to `SomeOptions` would work.
+//
+// Note that we also provide the default constructor `SomeOptions() {}`, so that
+// `SomeOptions options = {}` can work.
+// #define TORCH_OPTIONS_CTOR_VARIANT_ARG3(OPTIONS_NAME, ARG_NAME, TYPE1, TYPE2, TYPE3)
+// OPTIONS_NAME() {}
+// OPTIONS_NAME(torch::enumtype::TYPE1 ARG_NAME) : ARG_NAME##_(torch::TYPE1) {}
+// OPTIONS_NAME(torch::enumtype::TYPE2 ARG_NAME) : ARG_NAME##_(torch::TYPE2) {}
+// OPTIONS_NAME(torch::enumtype::TYPE3 ARG_NAME) : ARG_NAME##_(torch::TYPE3) {}
+
+// #define TORCH_OPTIONS_CTOR_VARIANT_ARG4(OPTIONS_NAME, ARG_NAME, TYPE1, TYPE2, TYPE3, TYPE4)
+// OPTIONS_NAME() {}
+// OPTIONS_NAME(torch::enumtype::TYPE1 ARG_NAME) : ARG_NAME##_(torch::TYPE1) {}
+// OPTIONS_NAME(torch::enumtype::TYPE2 ARG_NAME) : ARG_NAME##_(torch::TYPE2) {}
+// OPTIONS_NAME(torch::enumtype::TYPE3 ARG_NAME) : ARG_NAME##_(torch::TYPE3) {}
+// OPTIONS_NAME(torch::enumtype::TYPE4 ARG_NAME) : ARG_NAME##_(torch::TYPE4) {}
+// Targeting ../kLinear.java
 
 
 
-// Targeting ../Type.java
+
+// Targeting ../kConv1D.java
 
 
 
-// Targeting ../TensorIndex.java
 
-
- // namespace indexing
-
-// Targeting ../Node.java
+// Targeting ../kConv2D.java
 
 
 
- // namespace torch::autograd
-// Targeting ../Quantizer.java
+
+// Targeting ../kConv3D.java
 
 
-// This is temporary typedef to enable Quantizer in aten native function API
-// we'll remove them when we are actually exposing Quantizer class
-// to frontend
-@Namespace("at::impl") public static native @Cast("bool") boolean variable_excluded_from_dispatch();
 
+
+// Targeting ../kConvTranspose1D.java
+
+
+
+
+// Targeting ../kConvTranspose2D.java
+
+
+
+
+// Targeting ../kConvTranspose3D.java
+
+
+
+
+// Targeting ../kSigmoid.java
+
+
+
+
+// Targeting ../kTanh.java
+
+
+
+
+// Targeting ../kReLU.java
+
+
+
+
+// Targeting ../kLeakyReLU.java
+
+
+
+
+// Targeting ../kFanIn.java
+
+
+
+
+// Targeting ../kFanOut.java
+
+
+
+
+// Targeting ../kConstant.java
+
+
+
+
+// Targeting ../kReflect.java
+
+
+
+
+// Targeting ../kReplicate.java
+
+
+
+
+// Targeting ../kCircular.java
+
+
+
+
+// Targeting ../kNearest.java
+
+
+
+
+// Targeting ../kBilinear.java
+
+
+
+
+// Targeting ../kBicubic.java
+
+
+
+
+// Targeting ../kTrilinear.java
+
+
+
+
+// Targeting ../kArea.java
+
+
+
+
+// Targeting ../kSum.java
+
+
+
+
+// Targeting ../kMean.java
+
+
+
+
+// Targeting ../kMax.java
+
+
+
+
+// Targeting ../kNone.java
+
+
+
+
+// Targeting ../kBatchMean.java
+
+
+
+
+// Targeting ../kZeros.java
+
+
+
+
+// Targeting ../kBorder.java
+
+
+
+
+// Targeting ../kReflection.java
+
+
+
+
+// Targeting ../kRNN_TANH.java
+
+
+
+
+// Targeting ../kRNN_RELU.java
+
+
+
+
+// Targeting ../kLSTM.java
+
+
+
+
+// Targeting ../kGRU.java
+
+
+
+
+// Targeting ../_compute_enum_name.java
+
+
+
+ // namespace enumtype
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/jit.h
+
+// #pragma once
+
+// #include <torch/csrc/WindowsTorchApiMacro.h>
+// #include <torch/csrc/jit/api/module.h>
+
+// #include <string>
+// #include <memory>
+
+/** Compiles script code into an executable graph.
+ * 
+ *  Takes a string containing functions in script syntax and compiles them into
+ *  a module (graph). The returned module provides a {@code run_method} function
+ *  that may be used to invoke the compiled functions.
+ * 
+ *  For example:
+ *  \rst
+ *  .. code-block:: cpp
+ * 
+ *    auto module = torch::jit::compile(R"JIT(
+ *      def relu_script(a, b):
+ *        return torch.relu(a + b)
+ *      def test_while(a, i):
+ *        while i < 10:
+ *          a += a
+ *          i += 1
+ *        return a
+ *    )JIT");
+ *    IValue output = module->run_method("relu_script", a, b);
+ *  \endrst */
+
+ // namespace jit
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/nn.h
+
+// #pragma once
+
+// #include <torch/nn/cloneable.h>
+// #include <torch/nn/functional.h>
+// #include <torch/nn/init.h>
+// #include <torch/nn/module.h>
+// #include <torch/nn/modules.h>
+// #include <torch/nn/options.h>
+// #include <torch/nn/pimpl.h>
+// #include <torch/nn/utils.h>
+
+
+// Parsed from torch/csrc/api/include/torch/nn/cloneable.h
+
+// #pragma once
+
+// #include <torch/nn/module.h>
+// #include <torch/types.h>
+// #include <torch/utils.h>
+
+// #include <c10/core/TensorOptions.h>
+// #include <c10/util/Exception.h>
+
+// #include <memory>
+// #include <utility>
+// Targeting ../CloneableLinearImpl.java
+
+
+// Targeting ../CloneableIdentityImpl.java
+
+
+// Targeting ../CloneableBilinearImpl.java
+
+
+
+ // namespace nn
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/nn/functional.h
+
+// #pragma once
+
+// #include <torch/nn/functional/batchnorm.h>
+// #include <torch/nn/functional/conv.h>
+// #include <torch/nn/functional/distance.h>
+// #include <torch/nn/functional/dropout.h>
+// #include <torch/nn/functional/embedding.h>
+// #include <torch/nn/functional/fold.h>
+// #include <torch/nn/functional/linear.h>
+// #include <torch/nn/functional/loss.h>
+// #include <torch/nn/functional/normalization.h>
+// #include <torch/nn/functional/padding.h>
+// #include <torch/nn/functional/pixelshuffle.h>
+// #include <torch/nn/functional/pooling.h>
+// #include <torch/nn/functional/upsampling.h>
+// #include <torch/nn/functional/vision.h>
+// #include <torch/nn/functional/instancenorm.h>
+
+
+// Parsed from torch/csrc/api/include/torch/nn/functional/batchnorm.h
+
+// #pragma once
+
+// #include <torch/nn/options/batchnorm.h>
+// #include <torch/types.h>
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer batch_norm(@Cast("const torch::Tensor*") @ByRef Pointer input,
+                         @Cast("const torch::Tensor*") @ByRef Pointer running_mean,
+                         @Cast("const torch::Tensor*") @ByRef Pointer running_var,
+                         @ByVal @Cast("torch::Tensor*") Pointer weight,
+                         @ByVal @Cast("torch::Tensor*") Pointer bias,
+                         @Cast("bool") boolean training,
+                         @ByVal @Cast("c10::optional<double>*") Pointer momentum,
+                         double eps);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.batch_norm
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::BatchNormFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::batch_norm(input, mean, variance, F::BatchNormFuncOptions().weight(weight).bias(bias).momentum(0.1).eps(1e-05).training(false));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer batch_norm(@Cast("const torch::Tensor*") @ByRef Pointer input, @Cast("const torch::Tensor*") @ByRef Pointer running_mean,
+                         @Cast("const torch::Tensor*") @ByRef Pointer running_var, @Cast("const BatchNormFuncOptions*") @ByRef(nullValue = "BatchNormFuncOptions({})") Pointer options);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer batch_norm(@Cast("const torch::Tensor*") @ByRef Pointer input, @Cast("const torch::Tensor*") @ByRef Pointer running_mean,
+                         @Cast("const torch::Tensor*") @ByRef Pointer running_var);
+
+ // namespace functional
+ // namespace nn
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/nn/options/batchnorm.h
+
+// #pragma once
+
+// #include <torch/arg.h>
+// #include <torch/csrc/WindowsTorchApiMacro.h>
+// #include <torch/types.h>
+// Targeting ../BatchNormOptions.java
+
+
+
+/** Options for the {@code BatchNorm1d} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  BatchNorm1d model(BatchNorm1dOptions(4).eps(0.5).momentum(0.1).affine(false).track_running_stats(true));
+ *  }</pre> */
+
+///
+
+/** Options for the {@code BatchNorm2d} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  BatchNorm2d model(BatchNorm2dOptions(4).eps(0.5).momentum(0.1).affine(false).track_running_stats(true));
+ *  }</pre> */
+
+///
+
+/** Options for the {@code BatchNorm3d} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  BatchNorm3d model(BatchNorm3dOptions(4).eps(0.5).momentum(0.1).affine(false).track_running_stats(true));
+ *  }</pre> */
+
+// ============================================================================
+// Targeting ../BatchNormFuncOptions.java
+
+
+
+ // namespace functional
+
+ // namespace nn
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/nn/functional/conv.h
+
+// #pragma once
+
+// #include <torch/nn/options/conv.h>
+// #include <torch/types.h>
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer conv1d(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer weight,
+    @Cast("const torch::Tensor*") @ByRef Pointer bias,
+    @ByVal ExpandingArray1 stride,
+    @ByVal ExpandingArray1 padding,
+    @ByVal ExpandingArray1 dilation,
+    @Cast("int64_t") long groups);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.conv1d
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::Conv1dFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::conv1d(x, weight, F::Conv1dFuncOptions().stride(1));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer conv1d(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer weight,
+    @Cast("const Conv1dFuncOptions*") @ByRef(nullValue = "Conv1dFuncOptions({})") Pointer options);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer conv1d(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer weight);
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer conv2d(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer weight,
+    @Cast("const torch::Tensor*") @ByRef Pointer bias,
+    @ByVal ExpandingArray2 stride,
+    @ByVal ExpandingArray2 padding,
+    @ByVal ExpandingArray2 dilation,
+    @Cast("int64_t") long groups);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.conv2d
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::Conv2dFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::conv2d(x, weight, F::Conv2dFuncOptions().stride(1));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer conv2d(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer weight,
+    @Cast("const Conv2dFuncOptions*") @ByRef(nullValue = "Conv2dFuncOptions({})") Pointer options);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer conv2d(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer weight);
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer conv3d(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer weight,
+    @Cast("const torch::Tensor*") @ByRef Pointer bias,
+    @ByVal ExpandingArray3 stride,
+    @ByVal ExpandingArray3 padding,
+    @ByVal ExpandingArray3 dilation,
+    @Cast("int64_t") long groups);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.conv3d
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::Conv3dFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::conv3d(x, weight, F::Conv3dFuncOptions().stride(1));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer conv3d(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer weight,
+    @Cast("const Conv3dFuncOptions*") @ByRef(nullValue = "Conv3dFuncOptions({})") Pointer options);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer conv3d(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer weight);
+
+// ============================================================================
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer conv_transpose1d(@Cast("const torch::Tensor*") @ByRef Pointer input, @Cast("const torch::Tensor*") @ByRef Pointer weight,
+                               @Cast("const torch::Tensor*") @ByRef Pointer bias, @ByVal @Cast("IntArrayRef*") Pointer stride,
+                               @ByVal @Cast("IntArrayRef*") Pointer padding, @ByVal @Cast("IntArrayRef*") Pointer output_padding,
+                               @Cast("int64_t") long groups, @ByVal @Cast("IntArrayRef*") Pointer dilation);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.conv_transpose1d
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::ConvTranspose1dFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::conv_transpose1d(x, weight, F::ConvTranspose1dFuncOptions().stride(1));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer conv_transpose1d(@Cast("const torch::Tensor*") @ByRef Pointer input, @Cast("const torch::Tensor*") @ByRef Pointer weight,
+                               @Cast("const ConvTranspose1dFuncOptions*") @ByRef(nullValue = "ConvTranspose1dFuncOptions({})") Pointer options);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer conv_transpose1d(@Cast("const torch::Tensor*") @ByRef Pointer input, @Cast("const torch::Tensor*") @ByRef Pointer weight);
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer conv_transpose2d(@Cast("const torch::Tensor*") @ByRef Pointer input, @Cast("const torch::Tensor*") @ByRef Pointer weight,
+                               @Cast("const torch::Tensor*") @ByRef Pointer bias, @ByVal @Cast("IntArrayRef*") Pointer stride,
+                               @ByVal @Cast("IntArrayRef*") Pointer padding, @ByVal @Cast("IntArrayRef*") Pointer output_padding,
+                               @Cast("int64_t") long groups, @ByVal @Cast("IntArrayRef*") Pointer dilation);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.conv_transpose2d
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::ConvTranspose2dFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::conv_transpose2d(x, weight, F::ConvTranspose2dFuncOptions().stride(1));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer conv_transpose2d(@Cast("const torch::Tensor*") @ByRef Pointer input, @Cast("const torch::Tensor*") @ByRef Pointer weight,
+                               @Cast("const ConvTranspose2dFuncOptions*") @ByRef(nullValue = "ConvTranspose2dFuncOptions({})") Pointer options);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer conv_transpose2d(@Cast("const torch::Tensor*") @ByRef Pointer input, @Cast("const torch::Tensor*") @ByRef Pointer weight);
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer conv_transpose3d(@Cast("const torch::Tensor*") @ByRef Pointer input, @Cast("const torch::Tensor*") @ByRef Pointer weight,
+                               @Cast("const torch::Tensor*") @ByRef Pointer bias, @ByVal @Cast("IntArrayRef*") Pointer stride,
+                               @ByVal @Cast("IntArrayRef*") Pointer padding, @ByVal @Cast("IntArrayRef*") Pointer output_padding,
+                               @Cast("int64_t") long groups, @ByVal @Cast("IntArrayRef*") Pointer dilation);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.conv_transpose3d
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::ConvTranspose3dFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::conv_transpose3d(x, weight, F::ConvTranspose3dFuncOptions().stride(1));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer conv_transpose3d(@Cast("const torch::Tensor*") @ByRef Pointer input, @Cast("const torch::Tensor*") @ByRef Pointer weight,
+                               @Cast("const ConvTranspose3dFuncOptions*") @ByRef(nullValue = "ConvTranspose3dFuncOptions({})") Pointer options);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer conv_transpose3d(@Cast("const torch::Tensor*") @ByRef Pointer input, @Cast("const torch::Tensor*") @ByRef Pointer weight);
+
+ // namespace functional
+ // namespace nn
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/nn/options/conv.h
+
+// #pragma once
+
+// #include <torch/arg.h>
+// #include <torch/enum.h>
+// #include <torch/csrc/WindowsTorchApiMacro.h>
+// #include <torch/expanding_array.h>
+// #include <torch/types.h>
+
+/** Options for a {@code D}-dimensional convolution or convolution transpose module. */
+
+ // namespace detail
+
+// ============================================================================
+
+/** Options for a {@code D}-dimensional convolution module. */
+
+/** {@code ConvOptions} specialized for the {@code Conv1d} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  Conv1d model(Conv1dOptions(3, 2, 3).stride(1).bias(false));
+ *  }</pre> */
+
+///
+
+/** {@code ConvOptions} specialized for the {@code Conv2d} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  Conv2d model(Conv2dOptions(3, 2, 3).stride(1).bias(false));
+ *  }</pre> */
+
+///
+
+/** {@code ConvOptions} specialized for the {@code Conv3d} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  Conv3d model(Conv3dOptions(3, 2, 3).stride(1).bias(false));
+ *  }</pre> */
+
+// ============================================================================
+
+/** Options for a {@code D}-dimensional convolution functional. */
+
+/** {@code ConvFuncOptions} specialized for {@code torch::nn::functional::conv1d}.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::conv1d(x, weight, F::Conv1dFuncOptions().stride(1));
+ *  }</pre> */
+
+///
+
+/** {@code ConvFuncOptions} specialized for {@code torch::nn::functional::conv2d}.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::conv2d(x, weight, F::Conv2dFuncOptions().stride(1));
+ *  }</pre> */
+
+///
+
+/** {@code ConvFuncOptions} specialized for {@code torch::nn::functional::conv3d}.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::conv3d(x, weight, F::Conv3dFuncOptions().stride(1));
+ *  }</pre> */
+
+ // namespace functional
+
+// ============================================================================
+
+/** {@code ConvTransposeOptions} specialized for the {@code ConvTranspose1d} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  ConvTranspose1d model(ConvTranspose1dOptions(3, 2, 3).stride(1).bias(false));
+ *  }</pre> */
+
+///
+
+/** {@code ConvTransposeOptions} specialized for the {@code ConvTranspose2d} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  ConvTranspose2d model(ConvTranspose2dOptions(3, 2, 3).stride(1).bias(false));
+ *  }</pre> */
+
+///
+
+/** {@code ConvTransposeOptions} specialized for the {@code ConvTranspose3d} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  ConvTranspose3d model(ConvTranspose3dOptions(2, 2, 2).stride(1).bias(false));
+ *  }</pre> */
+
+// ============================================================================
+
+/** Options for a {@code D}-dimensional convolution functional. */
+
+/** {@code ConvTransposeFuncOptions} specialized for {@code torch::nn::functional::conv_transpose1d}.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::conv_transpose1d(x, weight, F::ConvTranspose1dFuncOptions().stride(1));
+ *  }</pre> */
+
+///
+
+/** {@code ConvTransposeFuncOptions} specialized for {@code torch::nn::functional::conv_transpose2d}.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::conv_transpose2d(x, weight, F::ConvTranspose2dFuncOptions().stride(1));
+ *  }</pre> */
+
+///
+
+/** {@code ConvTransposeFuncOptions} specialized for {@code torch::nn::functional::conv_transpose3d}.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::conv_transpose3d(x, weight, F::ConvTranspose3dFuncOptions().stride(1));
+ *  }</pre> */
+
+ // namespace functional
+
+ // namespace nn
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/nn/functional/distance.h
+
+// #pragma once
+
+// #include <torch/nn/options/distance.h>
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer cosine_similarity(
+    @Cast("const torch::Tensor*") @ByRef Pointer x1,
+    @Cast("const torch::Tensor*") @ByRef Pointer x2,
+    @Cast("int64_t") long dim,
+    double eps);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.cosine_similarity
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::CosineSimilarityFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::cosine_similarity(input1, input2, F::CosineSimilarityFuncOptions().dim(1));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer cosine_similarity(
+    @Cast("const torch::Tensor*") @ByRef Pointer x1,
+    @Cast("const torch::Tensor*") @ByRef Pointer x2,
+    @Cast("const CosineSimilarityFuncOptions*") @ByRef(nullValue = "CosineSimilarityFuncOptions({})") Pointer options);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer cosine_similarity(
+    @Cast("const torch::Tensor*") @ByRef Pointer x1,
+    @Cast("const torch::Tensor*") @ByRef Pointer x2);
+
+// ============================================================================
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer pairwise_distance(
+    @Cast("const torch::Tensor*") @ByRef Pointer x1,
+    @Cast("const torch::Tensor*") @ByRef Pointer x2,
+    double p,
+    double eps,
+    @Cast("bool") boolean keepdim);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.pairwise_distance
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::PairwiseDistanceFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::pairwise_distance(input1, input2, F::PairwiseDistanceFuncOptions().p(1));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer pairwise_distance(
+    @Cast("const torch::Tensor*") @ByRef Pointer x1,
+    @Cast("const torch::Tensor*") @ByRef Pointer x2,
+    @Cast("const PairwiseDistanceFuncOptions*") @ByRef(nullValue = "PairwiseDistanceFuncOptions({})") Pointer options);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer pairwise_distance(
+    @Cast("const torch::Tensor*") @ByRef Pointer x1,
+    @Cast("const torch::Tensor*") @ByRef Pointer x2);
+
+// ============================================================================
+
+/** Computes the p-norm distance between every pair of row vectors in the input.
+ *  This function will be faster if the rows are contiguous. */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer pdist(@Cast("const torch::Tensor*") @ByRef Pointer input, double p/*=2.0*/);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer pdist(@Cast("const torch::Tensor*") @ByRef Pointer input);
+
+ // namespace functional
+ // namespace nn
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/nn/options/distance.h
+
+// #pragma once
+
+// #include <torch/arg.h>
+// #include <torch/csrc/WindowsTorchApiMacro.h>
+// #include <torch/types.h>
+// Targeting ../CosineSimilarityOptions.java
+
+
+/** Options for {@code torch::nn::functional::cosine_similarity}.
+ * 
+ *  See the documentation for {@code torch::nn::CosineSimilarityOptions} class to learn what
+ *  arguments are supported.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::cosine_similarity(input1, input2, F::CosineSimilarityFuncOptions().dim(1));
+ *  }</pre> */
+
+// Targeting ../PairwiseDistanceOptions.java
+
+
+/** Options for {@code torch::nn::functional::pairwise_distance}.
+ * 
+ *  See the documentation for {@code torch::nn::PairwiseDistanceOptions} class to learn what
+ *  arguments are supported.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::pairwise_distance(input1, input2, F::PairwiseDistanceFuncOptions().p(1));
+ *  }</pre> */
+ // namespace functional
+
+ // namespace nn
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/nn/functional/dropout.h
+
+// #pragma once
+
+// #include <torch/nn/options/dropout.h>
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer dropout(@ByVal @Cast("torch::Tensor*") Pointer input, double p, @Cast("bool") boolean training, @Cast("bool") boolean inplace);
+
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.dropout
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::DropoutFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::dropout(input, F::DropoutFuncOptions().p(0.5));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer dropout(@ByVal @Cast("torch::Tensor*") Pointer input,
+    @Const @ByRef(nullValue = "DropoutFuncOptions({})") DropoutFuncOptions options);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer dropout(@ByVal @Cast("torch::Tensor*") Pointer input);
+
+// ============================================================================
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer dropout2d(@ByVal @Cast("torch::Tensor*") Pointer input, double p, @Cast("bool") boolean training, @Cast("bool") boolean inplace);
+
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.dropout2d
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::Dropout2dFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::dropout2d(input, F::Dropout2dFuncOptions().p(0.5));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer dropout2d(@ByVal @Cast("torch::Tensor*") Pointer input,
+    @Cast("const Dropout2dFuncOptions*") @ByRef(nullValue = "Dropout2dFuncOptions({})") Pointer options);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer dropout2d(@ByVal @Cast("torch::Tensor*") Pointer input);
+
+// ============================================================================
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer dropout3d(@ByVal @Cast("torch::Tensor*") Pointer input, double p, @Cast("bool") boolean training, @Cast("bool") boolean inplace);
+
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.dropout3d
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::Dropout3dFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::dropout3d(input, F::Dropout3dFuncOptions().p(0.5));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer dropout3d(@ByVal @Cast("torch::Tensor*") Pointer input,
+    @Cast("const Dropout3dFuncOptions*") @ByRef(nullValue = "Dropout3dFuncOptions({})") Pointer options);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer dropout3d(@ByVal @Cast("torch::Tensor*") Pointer input);
+
+// ============================================================================
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer alpha_dropout(@ByVal @Cast("torch::Tensor*") Pointer input, double p, @Cast("bool") boolean training, @Cast("bool") boolean inplace);
+
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.alpha_dropout
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::AlphaDropoutFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::alpha_dropout(input, F::AlphaDropoutFuncOptions().p(0.5).training(false));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer alpha_dropout(@ByVal @Cast("torch::Tensor*") Pointer input, @Const @ByRef(nullValue = "AlphaDropoutFuncOptions({})") AlphaDropoutFuncOptions options);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer alpha_dropout(@ByVal @Cast("torch::Tensor*") Pointer input);
+
+// ============================================================================
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer feature_alpha_dropout(@ByVal @Cast("torch::Tensor*") Pointer input, double p, @Cast("bool") boolean training, @Cast("bool") boolean inplace);
+
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.feature_alpha_dropout
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::FeatureAlphaDropoutFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::feature_alpha_dropout(input, F::FeatureAlphaDropoutFuncOptions().p(0.5).training(false));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer feature_alpha_dropout(@ByVal @Cast("torch::Tensor*") Pointer input, @Const @ByRef(nullValue = "FeatureAlphaDropoutFuncOptions({})") FeatureAlphaDropoutFuncOptions options);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer feature_alpha_dropout(@ByVal @Cast("torch::Tensor*") Pointer input);
+
+ // namespace functional
+ // namespace nn
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/nn/options/dropout.h
+
+// #pragma once
+
+// #include <torch/arg.h>
+// #include <torch/csrc/WindowsTorchApiMacro.h>
+// #include <torch/types.h>
+// Targeting ../DropoutOptions.java
+
+
+
+/** Options for the {@code Dropout2d} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  Dropout2d model(Dropout2dOptions().p(0.42).inplace(true));
+ *  }</pre> */
+
+///
+
+/** Options for the {@code Dropout3d} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  Dropout3d model(Dropout3dOptions().p(0.42).inplace(true));
+ *  }</pre> */
+
+///
+
+/** Options for the {@code AlphaDropout} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  AlphaDropout model(AlphaDropoutOptions(0.2).inplace(true));
+ *  }</pre> */
+
+///
+
+/** Options for the {@code FeatureAlphaDropout} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  FeatureAlphaDropout model(FeatureAlphaDropoutOptions(0.2).inplace(true));
+ *  }</pre> */
+// Targeting ../DropoutFuncOptions.java
+
+
+
+/** Options for {@code torch::nn::functional::dropout2d}.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::dropout2d(input, F::Dropout2dFuncOptions().p(0.5));
+ *  }</pre> */
+
+///
+
+/** Options for {@code torch::nn::functional::dropout3d}.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::dropout3d(input, F::Dropout3dFuncOptions().p(0.5));
+ *  }</pre> */
+
+///
+// Targeting ../AlphaDropoutFuncOptions.java
+
+
+// Targeting ../FeatureAlphaDropoutFuncOptions.java
+
+
+
+ // namespace functional
+
+ // namespace nn
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/nn/functional/embedding.h
+
+// #pragma once
+
+// #include <torch/nn/options/embedding.h>
+
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer one_hot(@Cast("const torch::Tensor*") @ByRef Pointer tensor, @Cast("int64_t") long num_classes/*=-1*/);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer one_hot(@Cast("const torch::Tensor*") @ByRef Pointer tensor);
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native void _no_grad_embedding_renorm_(@ByVal @Cast("torch::Tensor*") Pointer weight, @Cast("const torch::Tensor*") @ByRef Pointer input, float max_norm, float norm_type);
+
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer embedding(@Cast("const torch::Tensor*") @ByRef Pointer input,
+                        @Cast("const torch::Tensor*") @ByRef Pointer weight,
+                        @ByVal @Cast("c10::optional<int64_t>*") Pointer padding_idx,
+                        @ByVal @Cast("c10::optional<double>*") Pointer max_norm,
+                        double norm_type,
+                        @Cast("bool") boolean scale_grad_by_freq,
+                        @Cast("bool") boolean sparse);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.embedding
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::EmbeddingFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::embedding(input, weight, F::EmbeddingFuncOptions().norm_type(2.5).scale_grad_by_freq(true).sparse(true));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer embedding(@Cast("const torch::Tensor*") @ByRef Pointer input, @Cast("const torch::Tensor*") @ByRef Pointer weight, @Const @ByRef(nullValue = "EmbeddingFuncOptions({})") EmbeddingFuncOptions options);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer embedding(@Cast("const torch::Tensor*") @ByRef Pointer input, @Cast("const torch::Tensor*") @ByRef Pointer weight);
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer embedding_bag(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer weight,
+    @Cast("const torch::Tensor*") @ByRef Pointer offsets,
+    @ByVal @Cast("c10::optional<double>*") Pointer max_norm,
+    double norm_type,
+    @Cast("bool") boolean scale_grad_by_freq,
+    @ByVal @Cast("EmbeddingBagMode*") Pointer mode,
+    @Cast("bool") boolean sparse,
+    @Cast("const torch::Tensor*") @ByRef Pointer per_sample_weights,
+    @Cast("bool") boolean include_last_offset);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.embedding_bag
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::EmbeddingBagFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::embedding_bag(input, weight, F::EmbeddingBagFuncOptions().mode(torch::kSum).offsets(offsets));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer embedding_bag(@Cast("const torch::Tensor*") @ByRef Pointer input, @Cast("const torch::Tensor*") @ByRef Pointer weight, @Const @ByRef(nullValue = "EmbeddingBagFuncOptions({})") EmbeddingBagFuncOptions options);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer embedding_bag(@Cast("const torch::Tensor*") @ByRef Pointer input, @Cast("const torch::Tensor*") @ByRef Pointer weight);
+
+ // namespace functional
+ // namespace nn
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/nn/options/embedding.h
+
+// #pragma once
+
+// #include <torch/arg.h>
+// #include <torch/csrc/WindowsTorchApiMacro.h>
+// #include <torch/types.h>
+// #include <torch/enum.h>
+// Targeting ../EmbeddingOptions.java
+
+
+// Targeting ../EmbeddingFromPretrainedOptions.java
+
+
+
+// ============================================================================
+// Targeting ../EmbeddingFuncOptions.java
+
+
+
+ // namespace functional
+
+// ============================================================================
+
+
+///
+// Targeting ../EmbeddingBagOptions.java
+
+
+// Targeting ../EmbeddingBagFromPretrainedOptions.java
+
+
+
+// ============================================================================
+// Targeting ../EmbeddingBagFuncOptions.java
+
+
+
+ // namespace functional
+
+ // namespace nn
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/nn/functional/fold.h
+
+// #pragma once
+
+// #include <torch/nn/options/fold.h>
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer fold(@Cast("const torch::Tensor*") @ByRef Pointer input,
+                   @ByVal ExpandingArray2 output_size,
+                   @ByVal ExpandingArray2 kernel_size,
+                   @ByVal ExpandingArray2 dilation,
+                   @ByVal ExpandingArray2 padding,
+                   @ByVal ExpandingArray2 stride);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.fold
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::FoldFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::fold(input, F::FoldFuncOptions({3, 2}, {2, 2}));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer fold(@Cast("const torch::Tensor*") @ByRef Pointer input, @Const @ByRef FoldFuncOptions options);
+
+// ============================================================================
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer unfold(@Cast("const torch::Tensor*") @ByRef Pointer input,
+                     @ByVal ExpandingArray2 kernel_size,
+                     @ByVal ExpandingArray2 dilation,
+                     @ByVal ExpandingArray2 padding,
+                     @ByVal ExpandingArray2 stride);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.unfold
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::UnfoldFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::unfold(input, F::UnfoldFuncOptions({2, 2}).padding(1).stride(2));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer unfold(@Cast("const torch::Tensor*") @ByRef Pointer input, @Const @ByRef UnfoldFuncOptions options);
+
+ // namespace functional
+ // namespace nn
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/nn/options/fold.h
+
+// #pragma once
+
+// #include <torch/arg.h>
+// #include <torch/csrc/WindowsTorchApiMacro.h>
+// #include <torch/expanding_array.h>
+// #include <torch/types.h>
+// Targeting ../FoldOptions.java
+
+
+/** Options for {@code torch::nn::functional::fold}.
+ * 
+ *  See the documentation for {@code torch::nn::FoldOptions} class to learn what
+ *  arguments are supported.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::fold(input, F::FoldFuncOptions({3, 2}, {2, 2}));
+ *  }</pre> */
+
+// Targeting ../UnfoldOptions.java
+
+
+/** Options for {@code torch::nn::functional::unfold}.
+ * 
+ *  See the documentation for {@code torch::nn::UnfoldOptions} class to learn what
+ *  arguments are supported.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::unfold(input, F::UnfoldFuncOptions({2, 2}).padding(1).stride(2));
+ *  }</pre> */
+ // namespace functional
+
+ // namespace nn
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/nn/functional/linear.h
+
+// #pragma once
+
+// #include <torch/types.h>
+
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer bilinear(@Cast("const torch::Tensor*") @ByRef Pointer input1, @Cast("const torch::Tensor*") @ByRef Pointer input2, @Cast("const torch::Tensor*") @ByRef Pointer weight, @Cast("const torch::Tensor*") @ByRef(nullValue = "torch::Tensor()") Pointer bias);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer bilinear(@Cast("const torch::Tensor*") @ByRef Pointer input1, @Cast("const torch::Tensor*") @ByRef Pointer input2, @Cast("const torch::Tensor*") @ByRef Pointer weight);
+
+// ============================================================================
+
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer linear(@Cast("const torch::Tensor*") @ByRef Pointer input, @Cast("const torch::Tensor*") @ByRef Pointer weight,
+                     @Cast("const torch::Tensor*") @ByRef(nullValue = "torch::Tensor({})") Pointer bias);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer linear(@Cast("const torch::Tensor*") @ByRef Pointer input, @Cast("const torch::Tensor*") @ByRef Pointer weight);
+
+ // namespace functional
+ // namespace nn
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/nn/options/linear.h
+
+// #pragma once
+
+// #include <torch/arg.h>
+// #include <torch/csrc/WindowsTorchApiMacro.h>
+// #include <torch/types.h>
+// Targeting ../LinearOptions.java
+
+
+// Targeting ../FlattenOptions.java
+
+
+// Targeting ../BilinearOptions.java
+
+
+
+ // namespace nn
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/nn/functional/loss.h
+
+// #pragma once
+
+// #include <ATen/ExpandUtils.h>
+// #include <torch/nn/functional/activation.h>
+// #include <torch/nn/options/loss.h>
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.l1_loss
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::L1LossFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::l1_loss(input, target, F::L1LossFuncOptions(torch::kNone));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer l1_loss(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer target,
+    @Cast("const L1LossFuncOptions*") @ByRef(nullValue = "L1LossFuncOptions({})") Pointer options);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer l1_loss(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer target);
+
+// ============================================================================
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer kl_div(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer target,
+    @ByVal reduction_t reduction,
+    @Cast("bool") boolean log_target/*=false*/);
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer kl_div(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer target,
+    @ByVal reduction_t reduction);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.kl_div
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::KLDivFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::kl_div(input, target, F::KLDivFuncOptions.reduction(torch::kNone).log_target(false));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer kl_div(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer target,
+    @Cast("const KLDivFuncOptions*") @ByRef(nullValue = "KLDivFuncOptions({})") Pointer options);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer kl_div(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer target);
+
+// ============================================================================
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer mse_loss(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer target,
+    @ByVal reduction_t reduction);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.mse_loss
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::MSELossFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::mse_loss(input, target, F::MSELossFuncOptions(torch::kNone));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer mse_loss(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer target,
+    @Cast("const MSELossFuncOptions*") @ByRef(nullValue = "MSELossFuncOptions({})") Pointer options);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer mse_loss(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer target);
+
+// ============================================================================
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer binary_cross_entropy(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer target,
+    @Cast("const torch::Tensor*") @ByRef Pointer weight,
+    @ByVal reduction_t reduction);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.binary_cross_entropy
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::BinaryCrossEntropyFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::binary_cross_entropy(input, target, F::BinaryCrossEntropyFuncOptions().weight(weight));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer binary_cross_entropy(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer target,
+    @Cast("const BinaryCrossEntropyFuncOptions*") @ByRef(nullValue = "BinaryCrossEntropyFuncOptions({})") Pointer options);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer binary_cross_entropy(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer target);
+
+// ============================================================================
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer hinge_embedding_loss(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer target,
+    double margin,
+    @ByVal reduction_t reduction);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.hinge_embedding_loss
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::HingeEmbeddingLossFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::hinge_embedding_loss(input, target, F::HingeEmbeddingLossFuncOptions().margin(2));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer hinge_embedding_loss(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer target,
+    @Cast("const HingeEmbeddingLossFuncOptions*") @ByRef(nullValue = "HingeEmbeddingLossFuncOptions({})") Pointer options);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer hinge_embedding_loss(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer target);
+
+// ============================================================================
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer multi_margin_loss(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer target,
+    @Cast("int64_t") long p,
+    double margin,
+    @Cast("const torch::Tensor*") @ByRef Pointer weight,
+    @ByVal reduction_t reduction);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.multi_margin_loss
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::MultiMarginLossFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::multi_margin_loss(input, target, F::MultiMarginLossFuncOptions().margin(2).weight(weight));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer multi_margin_loss(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer target,
+    @Cast("const MultiMarginLossFuncOptions*") @ByRef(nullValue = "MultiMarginLossFuncOptions({})") Pointer options);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer multi_margin_loss(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer target);
+
+// ============================================================================
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer cosine_embedding_loss(
+    @Cast("const torch::Tensor*") @ByRef Pointer input1,
+    @Cast("const torch::Tensor*") @ByRef Pointer input2,
+    @Cast("const torch::Tensor*") @ByRef Pointer target,
+    double margin,
+    @ByVal reduction_t reduction);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.cosine_embedding_loss
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::CosineEmbeddingLossFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::cosine_embedding_loss(input1, input2, target, F::CosineEmbeddingLossFuncOptions().margin(0.5));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer cosine_embedding_loss(
+    @Cast("const torch::Tensor*") @ByRef Pointer input1,
+    @Cast("const torch::Tensor*") @ByRef Pointer input2,
+    @Cast("const torch::Tensor*") @ByRef Pointer target,
+    @Cast("const CosineEmbeddingLossFuncOptions*") @ByRef(nullValue = "CosineEmbeddingLossFuncOptions({})") Pointer options);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer cosine_embedding_loss(
+    @Cast("const torch::Tensor*") @ByRef Pointer input1,
+    @Cast("const torch::Tensor*") @ByRef Pointer input2,
+    @Cast("const torch::Tensor*") @ByRef Pointer target);
+
+// ============================================================================
+
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer _smooth_l1_loss(@Cast("const torch::Tensor*") @ByRef Pointer input, @Cast("const torch::Tensor*") @ByRef Pointer target);
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer smooth_l1_loss(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer target,
+    @ByVal reduction_t reduction);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.smooth_l1_loss
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::SmoothL1LossFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::smooth_l1_loss(input, target, F::SmoothL1LossFuncOptions(torch::kNone));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer smooth_l1_loss(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer target,
+    @Cast("const SmoothL1LossFuncOptions*") @ByRef(nullValue = "SmoothL1LossFuncOptions({})") Pointer options);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer smooth_l1_loss(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer target);
+
+// ============================================================================
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer multilabel_margin_loss(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer target,
+    @ByVal reduction_t reduction);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.multilabel_margin_loss
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::MultilabelMarginLossFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::multilabel_margin_loss(input, target, F::MultilabelMarginLossFuncOptions(torch::kNone));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer multilabel_margin_loss(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer target,
+    @Cast("const MultilabelMarginLossFuncOptions*") @ByRef(nullValue = "MultilabelMarginLossFuncOptions({})") Pointer options);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer multilabel_margin_loss(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer target);
+
+// ============================================================================
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer soft_margin_loss(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer target,
+    @ByVal reduction_t reduction);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.soft_margin_loss
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::SoftMarginLossFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::soft_margin_loss(input, target, F::SoftMarginLossFuncOptions(torch::kNone));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer soft_margin_loss(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer target,
+    @Cast("const SoftMarginLossFuncOptions*") @ByRef(nullValue = "SoftMarginLossFuncOptions({})") Pointer options);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer soft_margin_loss(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer target);
+
+// ============================================================================
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer multilabel_soft_margin_loss(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer target,
+    @Cast("const torch::Tensor*") @ByRef Pointer weight,
+    @ByVal reduction_t reduction);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.multilabel_soft_margin_loss
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::MultilabelSoftMarginLossFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::multilabel_soft_margin_loss(input, target, F::MultilabelSoftMarginLossFuncOptions().reduction(torch::kNone).weight(weight));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer multilabel_soft_margin_loss(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer target,
+    @Cast("const MultilabelSoftMarginLossFuncOptions*") @ByRef(nullValue = "MultilabelSoftMarginLossFuncOptions({})") Pointer options);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer multilabel_soft_margin_loss(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer target);
+
+// ============================================================================
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer triplet_margin_loss(
+    @Cast("const torch::Tensor*") @ByRef Pointer anchor,
+    @Cast("const torch::Tensor*") @ByRef Pointer positive,
+    @Cast("const torch::Tensor*") @ByRef Pointer negative,
+    double margin,
+    double p,
+    double eps,
+    @Cast("bool") boolean swap,
+    @ByVal reduction_t reduction);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.triplet_margin_loss
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::TripletMarginLossFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::triplet_margin_loss(anchor, positive, negative, F::TripletMarginLossFuncOptions().margin(1.0));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer triplet_margin_loss(
+    @Cast("const torch::Tensor*") @ByRef Pointer anchor,
+    @Cast("const torch::Tensor*") @ByRef Pointer positive,
+    @Cast("const torch::Tensor*") @ByRef Pointer negative,
+    @Cast("const TripletMarginLossFuncOptions*") @ByRef(nullValue = "TripletMarginLossFuncOptions({})") Pointer options);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer triplet_margin_loss(
+    @Cast("const torch::Tensor*") @ByRef Pointer anchor,
+    @Cast("const torch::Tensor*") @ByRef Pointer positive,
+    @Cast("const torch::Tensor*") @ByRef Pointer negative);
+
+// ============================================================================
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer ctc_loss(@Cast("const torch::Tensor*") @ByRef Pointer log_probs,
+                       @Cast("const torch::Tensor*") @ByRef Pointer targets,
+                       @Cast("const torch::Tensor*") @ByRef Pointer input_lengths,
+                       @Cast("const torch::Tensor*") @ByRef Pointer target_lengths,
+                       @Cast("int64_t") long blank,
+                       @ByVal reduction_t reduction,
+                       @Cast("bool") boolean zero_infinity);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.ctc_loss
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::CTCLossFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::ctc_loss(log_probs, targets, input_lengths, target_lengths, F::CTCLossFuncOptions().reduction(torch::kNone));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer ctc_loss(@Cast("const torch::Tensor*") @ByRef Pointer log_probs,
+                       @Cast("const torch::Tensor*") @ByRef Pointer targets,
+                       @Cast("const torch::Tensor*") @ByRef Pointer input_lengths,
+                       @Cast("const torch::Tensor*") @ByRef Pointer target_lengths,
+                       @Cast("const CTCLossFuncOptions*") @ByRef(nullValue = "CTCLossFuncOptions({})") Pointer options);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer ctc_loss(@Cast("const torch::Tensor*") @ByRef Pointer log_probs,
+                       @Cast("const torch::Tensor*") @ByRef Pointer targets,
+                       @Cast("const torch::Tensor*") @ByRef Pointer input_lengths,
+                       @Cast("const torch::Tensor*") @ByRef Pointer target_lengths);
+
+// ============================================================================
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer poisson_nll_loss(@Cast("const torch::Tensor*") @ByRef Pointer input,
+                               @Cast("const torch::Tensor*") @ByRef Pointer target,
+                               @Cast("bool") boolean log_input,
+                               @Cast("bool") boolean full,
+                               double eps,
+                               @ByVal reduction_t reduction);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.poisson_nll_loss
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::PoissonNLLLossFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::poisson_nll_loss(input, target, F::PoissonNLLLossFuncOptions().reduction(torch::kNone));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer poisson_nll_loss(@Cast("const torch::Tensor*") @ByRef Pointer input, @Cast("const torch::Tensor*") @ByRef Pointer target,
+                               @Const @ByRef(nullValue = "PoissonNLLLossFuncOptions({})") PoissonNLLLossFuncOptions options);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer poisson_nll_loss(@Cast("const torch::Tensor*") @ByRef Pointer input, @Cast("const torch::Tensor*") @ByRef Pointer target);
+
+// ============================================================================
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer margin_ranking_loss(@Cast("const torch::Tensor*") @ByRef Pointer input1,
+                                  @Cast("const torch::Tensor*") @ByRef Pointer input2,
+                                  @Cast("const torch::Tensor*") @ByRef Pointer target,
+                                  double margin,
+                                  @ByVal reduction_t reduction);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.margin_ranking_loss
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::MarginRankingLossFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::margin_ranking_loss(input1, input2, target, F::MarginRankingLossFuncOptions().margin(0.5).reduction(torch::kSum));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer margin_ranking_loss(@Cast("const torch::Tensor*") @ByRef Pointer input1, @Cast("const torch::Tensor*") @ByRef Pointer input2,
+  @Cast("const torch::Tensor*") @ByRef Pointer target, @Const @ByRef(nullValue = "MarginRankingLossFuncOptions({})") MarginRankingLossFuncOptions options);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer margin_ranking_loss(@Cast("const torch::Tensor*") @ByRef Pointer input1, @Cast("const torch::Tensor*") @ByRef Pointer input2,
+  @Cast("const torch::Tensor*") @ByRef Pointer target);
+
+// ============================================================================
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer nll_loss(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer target,
+    @Cast("const torch::Tensor*") @ByRef Pointer weight,
+    @Cast("int64_t") long ignore_index,
+    @Const @ByVal reduction_t reduction);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.nll_loss
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::NLLLossFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::nll_loss(input, target, F::NLLLossFuncOptions().ignore_index(-100).reduction(torch::kMean));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer nll_loss(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer target,
+    @Cast("const NLLLossFuncOptions*") @ByRef(nullValue = "NLLLossFuncOptions({})") Pointer options);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer nll_loss(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer target);
+
+// ============================================================================
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer cross_entropy(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer target,
+    @Cast("const torch::Tensor*") @ByRef Pointer weight,
+    @Cast("int64_t") long ignore_index,
+    @ByVal reduction_t reduction);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.cross_entropy
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::CrossEntropyFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::cross_entropy(input, target, F::CrossEntropyFuncOptions().ignore_index(-100).reduction(torch::kMean));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer cross_entropy(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer target,
+    @Cast("const CrossEntropyFuncOptions*") @ByRef(nullValue = "CrossEntropyFuncOptions({})") Pointer options);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer cross_entropy(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer target);
+
+// ============================================================================
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer binary_cross_entropy_with_logits(
+  @Cast("const torch::Tensor*") @ByRef Pointer input, @Cast("const torch::Tensor*") @ByRef Pointer target, @Cast("const torch::Tensor*") @ByRef Pointer weight,
+  @ByVal reduction_t reduction, @Cast("const torch::Tensor*") @ByRef Pointer pos_weight);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.binary_cross_entropy_with_logits
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::BinaryCrossEntropyWithLogitsFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::binary_cross_entropy_with_logits(input, target, F::BinaryCrossEntropyWithLogitsFuncOptions().pos_weight(pos_weight).reduction(torch::kSum));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer binary_cross_entropy_with_logits(
+  @Cast("const torch::Tensor*") @ByRef Pointer input, @Cast("const torch::Tensor*") @ByRef Pointer target,
+  @Cast("const BinaryCrossEntropyWithLogitsFuncOptions*") @ByRef(nullValue = "BinaryCrossEntropyWithLogitsFuncOptions({})") Pointer options);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer binary_cross_entropy_with_logits(
+  @Cast("const torch::Tensor*") @ByRef Pointer input, @Cast("const torch::Tensor*") @ByRef Pointer target);
+
+ // namespace functional
+ // namespace nn
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/nn/options/loss.h
+
+// #pragma once
+
+// #include <torch/arg.h>
+// #include <torch/enum.h>
+// #include <torch/csrc/WindowsTorchApiMacro.h>
+// #include <torch/types.h>
+// Targeting ../L1LossOptions.java
+
+
+/** Options for {@code torch::nn::functional::l1_loss}.
+ * 
+ *  See the documentation for {@code torch::nn::L1LossOptions} class to learn what
+ *  arguments are supported.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::l1_loss(input, target, F::L1LossFuncOptions(torch::kNone));
+ *  }</pre> */
+
+// Targeting ../KLDivLossOptions.java
+
+
+/** Options for {@code torch::nn::functional::kl_div}.
+ * 
+ *  See the documentation for {@code torch::nn::KLDivLossOptions} class to learn what
+ *  arguments are supported.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::kl_div(input, target, F::KLDivFuncOptions().reduction(torch::kNone).log_target(false));
+ *  }</pre> */
+
+// Targeting ../MSELossOptions.java
+
+
+/** Options for {@code torch::nn::functional::mse_loss}.
+ * 
+ *  See the documentation for {@code torch::nn::MSELossOptions} class to learn what
+ *  arguments are supported.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::mse_loss(input, target, F::MSELossFuncOptions(torch::kNone));
+ *  }</pre> */
+
+// Targeting ../BCELossOptions.java
+
+
+/** Options for {@code torch::nn::functional::binary_cross_entropy}.
+ * 
+ *  See the documentation for {@code torch::nn::BCELossOptions} class to learn what
+ *  arguments are supported.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::binary_cross_entropy(input, target, F::BinaryCrossEntropyFuncOptions().weight(weight));
+ *  }</pre> */
+
+// Targeting ../HingeEmbeddingLossOptions.java
+
+
+/** Options for {@code torch::nn::functional::hinge_embedding_loss}.
+ * 
+ *  See the documentation for {@code torch::nn::HingeEmbeddingLossOptions} class to learn what
+ *  arguments are supported.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::hinge_embedding_loss(input, target, F::HingeEmbeddingLossFuncOptions().margin(2));
+ *  }</pre> */
+
+// Targeting ../MultiMarginLossOptions.java
+
+
+/** Options for {@code torch::nn::functional::multi_margin_loss}.
+ * 
+ *  See the documentation for {@code torch::nn::MultiMarginLossOptions} class to learn what
+ *  arguments are supported.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::multi_margin_loss(input, target, F::MultiMarginLossFuncOptions().margin(2).weight(weight));
+ *  }</pre> */
+
+// Targeting ../CosineEmbeddingLossOptions.java
+
+
+/** Options for {@code torch::nn::functional::cosine_embedding_loss}.
+ * 
+ *  See the documentation for {@code torch::nn::CosineEmbeddingLossOptions} class to learn what
+ *  arguments are supported.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::cosine_embedding_loss(input1, input2, target, F::CosineEmbeddingLossFuncOptions().margin(0.5));
+ *  }</pre> */
+
+// Targeting ../MultiLabelMarginLossOptions.java
+
+
+/** Options for {@code torch::nn::functional::multilabel_margin_loss}.
+ * 
+ *  See the documentation for {@code torch::nn::MultiLabelMarginLossOptions} class to learn what
+ *  arguments are supported.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::multilabel_margin_loss(input, target, F::MultilabelMarginLossFuncOptions(torch::kNone));
+ *  }</pre> */
+
+// Targeting ../SoftMarginLossOptions.java
+
+
+/** Options for {@code torch::nn::functional::soft_margin_loss}.
+ * 
+ *  See the documentation for {@code torch::nn::SoftMarginLossOptions} class to learn what
+ *  arguments are supported.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::soft_margin_loss(input, target, F::SoftMarginLossFuncOptions(torch::kNone));
+ *  }</pre> */
+
+// Targeting ../MultiLabelSoftMarginLossOptions.java
+
+
+/** Options for {@code torch::nn::functional::multilabel_soft_margin_loss}.
+ * 
+ *  See the documentation for {@code torch::nn::MultiLabelSoftMarginLossOptions} class to learn what
+ *  arguments are supported.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::multilabel_soft_margin_loss(input, target, F::MultilabelSoftMarginLossFuncOptions().reduction(torch::kNone).weight(weight));
+ *  }</pre> */
+
+// Targeting ../TripletMarginLossOptions.java
+
+
+/** Options for {@code torch::nn::functional::triplet_margin_loss}.
+ * 
+ *  See the documentation for {@code torch::nn::TripletMarginLossOptions} class to learn what
+ *  arguments are supported.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::triplet_margin_loss(anchor, positive, negative, F::TripletMarginLossFuncOptions().margin(1.0));
+ *  }</pre> */
+
+// Targeting ../CTCLossOptions.java
+
+
+/** Options for {@code torch::nn::functional::ctc_loss}.
+ * 
+ *  See the documentation for {@code torch::nn::CTCLossOptions} class to learn what
+ *  arguments are supported.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::ctc_loss(log_probs, targets, input_lengths, target_lengths, F::CTCLossFuncOptions().reduction(torch::kNone));
+ *  }</pre> */
+
+// Targeting ../SmoothL1LossOptions.java
+
+
+/** Options for {@code torch::nn::functional::smooth_l1_loss}.
+ * 
+ *  See the documentation for {@code torch::nn::SmoothL1LossOptions} class to learn what
+ *  arguments are supported.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::smooth_l1_loss(input, target, F::SmoothL1LossFuncOptions(torch::kNone));
+ *  }</pre> */
+
+// Targeting ../PoissonNLLLossOptions.java
+
+
+/** Options for {@code torch::nn::functional::poisson_nll_loss}.
+ * 
+ *  See the documentation for {@code torch::nn::PoissonNLLLossOptions} class to learn what
+ *  arguments are supported.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::poisson_nll_loss(input, target, F::PoissonNLLLossFuncOptions().reduction(torch::kNone));
+ *  }</pre> */
+
+// Targeting ../MarginRankingLossOptions.java
+
+
+/** Options for {@code torch::nn::functional::margin_ranking_loss}.
+ * 
+ *  See the documentation for {@code torch::nn::MarginRankingLossOptions} class to learn what
+ *  arguments are supported.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::margin_ranking_loss(input1, input2, target, F::MarginRankingLossFuncOptions().margin(0.5).reduction(torch::kSum));
+ *  }</pre> */
+
+// Targeting ../NLLLossOptions.java
+
+
+/** Options for {@code torch::nn::functional::nll_loss}.
+ * 
+ *  See the documentation for {@code torch::nn::NLLLossOptions} class to learn what
+ *  arguments are supported.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::nll_loss(input, target, F::NLLLossFuncOptions().ignore_index(-100).reduction(torch::kMean));
+ *  }</pre> */
+
+// Targeting ../CrossEntropyLossOptions.java
+
+
+/** Options for {@code torch::nn::functional::cross_entropy}.
+ * 
+ *  See the documentation for {@code torch::nn::CrossEntropyLossOptions} class to learn what
+ *  arguments are supported.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::cross_entropy(input, target, F::CrossEntropyFuncOptions().ignore_index(-100).reduction(torch::kMean));
+ *  }</pre> */
+
+// Targeting ../BCEWithLogitsLossOptions.java
+
+
+/** Options for {@code torch::nn::functional::binary_cross_entropy_with_logits}.
+ * 
+ *  See the documentation for {@code torch::nn::BCEWithLogitsLossOptions} class to learn what
+ *  arguments are supported.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::binary_cross_entropy_with_logits(input, target, F::BinaryCrossEntropyWithLogitsFuncOptions().pos_weight(pos_weight).reduction(torch::kSum));
+ *  }</pre> */
+ // namespace functional
+
+ // namespace nn
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/nn/functional/normalization.h
+
+// #pragma once
+
+// #include <torch/nn/options/normalization.h>
+// #include <torch/nn/functional/padding.h>
+// #include <torch/nn/functional/pooling.h>
+// #include <torch/types.h>
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer normalize(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    double p,
+    @Cast("int64_t") long dim,
+    double eps,
+    @ByVal c10::optional<torch::Tensor> out);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.normalize
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::NormalizeFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::normalize(input, F::NormalizeFuncOptions().p(1).dim(-1));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer normalize(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @ByVal(nullValue = "NormalizeFuncOptions({})") NormalizeFuncOptions options);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer normalize(
+    @Cast("const torch::Tensor*") @ByRef Pointer input);
+
+// ============================================================================
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer layer_norm(@Cast("const torch::Tensor*") @ByRef Pointer input,
+                         @Cast("int64_t*") @StdVector LongPointer normalized_shape,
+                         @Cast("const torch::Tensor*") @ByRef Pointer weight,
+                         @Cast("const torch::Tensor*") @ByRef Pointer bias,
+                         double eps);
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer layer_norm(@Cast("const torch::Tensor*") @ByRef Pointer input,
+                         @Cast("int64_t*") @StdVector LongBuffer normalized_shape,
+                         @Cast("const torch::Tensor*") @ByRef Pointer weight,
+                         @Cast("const torch::Tensor*") @ByRef Pointer bias,
+                         double eps);
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer layer_norm(@Cast("const torch::Tensor*") @ByRef Pointer input,
+                         @Cast("int64_t*") @StdVector long[] normalized_shape,
+                         @Cast("const torch::Tensor*") @ByRef Pointer weight,
+                         @Cast("const torch::Tensor*") @ByRef Pointer bias,
+                         double eps);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.layer_norm
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::LayerNormFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::layer_norm(input, F::LayerNormFuncOptions({2, 2}).eps(2e-5));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer layer_norm(@Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Const @ByRef LayerNormFuncOptions options);
+
+// ============================================================================
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer local_response_norm(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("int64_t") long size,
+    double alpha,
+    double beta,
+    double k);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.local_response_norm
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::LocalResponseNormFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::local_response_norm(x, F::LocalResponseNormFuncOptions(2));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer local_response_norm(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const LocalResponseNormFuncOptions*") @ByRef Pointer options);
+
+// ============================================================================
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer group_norm(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("int64_t") long num_groups,
+    @Cast("const torch::Tensor*") @ByRef Pointer weight,
+    @Cast("const torch::Tensor*") @ByRef Pointer bias,
+    double eps);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.group_norm
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::GroupNormFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::group_norm(input, F::GroupNormFuncOptions(2).eps(2e-5));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer group_norm(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Const @ByRef GroupNormFuncOptions options);
+
+ // namespace functional
+ // namespace nn
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/nn/options/normalization.h
+
+// #pragma once
+
+// #include <torch/arg.h>
+// #include <torch/csrc/WindowsTorchApiMacro.h>
+// #include <torch/types.h>
+// #include <vector>
+// Targeting ../LayerNormOptions.java
+
+
+
+// ============================================================================
+// Targeting ../LayerNormFuncOptions.java
+
+
+
+
+// Targeting ../LocalResponseNormOptions.java
+
+
+/** Options for {@code torch::nn::functional::local_response_norm}.
+ * 
+ *  See the documentation for {@code torch::nn::LocalResponseNormOptions} class to learn what
+ *  arguments are supported.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::local_response_norm(x, F::LocalResponseNormFuncOptions(2));
+ *  }</pre> */
+
+// Targeting ../CrossMapLRN2dOptions.java
+
+
+
+// ============================================================================
+// Targeting ../NormalizeFuncOptions.java
+
+
+
+
+// Targeting ../GroupNormOptions.java
+
+
+
+// ============================================================================
+// Targeting ../GroupNormFuncOptions.java
+
+
+
+ // namespace functional
+
+ // namespace nn
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/nn/functional/padding.h
+
+// #pragma once
+
+// #include <torch/nn/options/padding.h>
+
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer _narrow_with_range(@Cast("const torch::Tensor*") @ByRef Pointer input, @Cast("int64_t") long dim, @Cast("int64_t") long start, @Cast("int64_t") long end);
+
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer _pad_circular(@ByVal @Cast("torch::Tensor*") Pointer input, @ByVal @Cast("IntArrayRef*") Pointer padding);
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer pad(@Cast("const torch::Tensor*") @ByRef Pointer input,
+                  @ByVal @Cast("IntArrayRef*") Pointer pad,
+                  @ByVal mode_t mode,
+                  double value);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.pad
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::PadFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::pad(input, F::PadFuncOptions({1, 2, 2, 1, 1, 2}).mode(torch::kReplicate));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer pad(@Cast("const torch::Tensor*") @ByRef Pointer input, @Const @ByRef PadFuncOptions options);
+
+ // namespace functional
+ // namespace nn
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/nn/options/padding.h
+
+// #pragma once
+
+// #include <c10/util/variant.h>
+// #include <torch/arg.h>
+// #include <torch/enum.h>
+// #include <torch/csrc/WindowsTorchApiMacro.h>
+// #include <torch/expanding_array.h>
+// #include <torch/types.h>
+
+/** Options for a {@code D}-dimensional ReflectionPad module. */
+
+/** {@code ReflectionPadOptions} specialized for the {@code ReflectionPad1d} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  ReflectionPad1d model(ReflectionPad1dOptions({3, 1}));
+ *  }</pre> */
+
+///
+
+/** {@code ReflectionPadOptions} specialized for the {@code ReflectionPad2d} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  ReflectionPad2d model(ReflectionPad2dOptions({1, 1, 2, 0}));
+ *  }</pre> */
+
+// ============================================================================
+
+/** Options for a {@code D}-dimensional ReplicationPad module. */
+
+/** {@code ReplicationPadOptions} specialized for the {@code ReplicationPad1d} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  ReplicationPad1d model(ReplicationPad1dOptions({3, 1}));
+ *  }</pre> */
+
+///
+
+/** {@code ReplicationPadOptions} specialized for the {@code ReplicationPad2d} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  ReplicationPad2d model(ReplicationPad2dOptions({1, 1, 2, 0}));
+ *  }</pre> */
+
+///
+
+/** {@code ReplicationPadOptions} specialized for the {@code ReplicationPad3d} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  ReplicationPad3d model(ReplicationPad3dOptions({1, 2, 1, 2, 1, 2}));
+ *  }</pre> */
+
+///
+// Targeting ../ZeroPad2dOptions.java
+
+
+
+// ============================================================================
+
+/** Options for a {@code D}-dimensional ConstantPad module. */
+
+/** {@code ConstantPadOptions} specialized for the {@code ConstantPad1d} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  ConstantPad1d model(ConstantPad1dOptions({3, 1}, 3.5));
+ *  }</pre> */
+
+///
+
+/** {@code ConstantPadOptions} specialized for the {@code ConstantPad2d} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  ConstantPad2d model(ConstantPad2dOptions({3, 0, 2, 1}, 3.5));
+ *  }</pre> */
+
+///
+
+/** {@code ConstantPadOptions} specialized for the {@code ConstantPad3d} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  ConstantPad3d model(ConstantPad3dOptions({1, 2, 1, 2, 1, 2}, 3.5));
+ *  }</pre> */
+
+// ============================================================================
+// Targeting ../PadFuncOptions.java
+
+
+
+ // namespace functional
+
+ // namespace nn
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/nn/functional/pixelshuffle.h
+
+// #pragma once
+
+// #include <torch/nn/options/pixelshuffle.h>
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer pixel_shuffle(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("int64_t") long upscale_factor);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.pixel_shuffle
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::PixelShuffleFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::pixel_shuffle(x, F::PixelShuffleFuncOptions(2));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer pixel_shuffle(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Const @ByRef PixelShuffleFuncOptions options);
+
+ // namespace functional
+ // namespace nn
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/nn/options/pixelshuffle.h
+
+// #pragma once
+
+// #include <torch/arg.h>
+// #include <torch/csrc/WindowsTorchApiMacro.h>
+// #include <torch/types.h>
+// Targeting ../PixelShuffleOptions.java
+
+
+/** Options for {@code torch::nn::functional::pixel_shuffle}.
+ * 
+ *  See the documentation for {@code torch::nn::PixelShuffleOptions} class to learn what
+ *  arguments are supported.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::pixel_shuffle(x, F::PixelShuffleFuncOptions(2));
+ *  }</pre> */
+ // namespace functional
+
+ // namespace nn
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/nn/functional/pooling.h
+
+// #pragma once
+
+// #include <torch/nn/functional/activation.h>
+// #include <torch/nn/options/pooling.h>
+// #include <torch/nn/modules/utils.h>
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer avg_pool1d(@Cast("const torch::Tensor*") @ByRef Pointer input,
+                         @ByVal ExpandingArray1 kernel_size,
+                         @ByVal ExpandingArray1 stride,
+                         @ByVal ExpandingArray1 padding,
+                         @Cast("bool") boolean ceil_mode,
+                         @Cast("bool") boolean count_include_pad);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.avg_pool1d
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::AvgPool1dFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::avg_pool1d(x, F::AvgPool1dFuncOptions(3).stride(2));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer avg_pool1d(@Cast("const torch::Tensor*") @ByRef Pointer input, @Const @ByRef AvgPool1dFuncOptions options);
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer avg_pool2d(@Cast("const torch::Tensor*") @ByRef Pointer input,
+                         @ByVal ExpandingArray2 kernel_size,
+                         @ByVal ExpandingArray2 stride,
+                         @ByVal ExpandingArray2 padding,
+                         @Cast("bool") boolean ceil_mode,
+                         @Cast("bool") boolean count_include_pad,
+                         @ByVal @Cast("c10::optional<int64_t>*") Pointer divisor_override);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.avg_pool2d
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::AvgPool2dFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::avg_pool2d(x, F::AvgPool2dFuncOptions(3).stride(2));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer avg_pool2d(@Cast("const torch::Tensor*") @ByRef Pointer input, @Const @ByRef AvgPool2dFuncOptions options);
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer avg_pool3d(@Cast("const torch::Tensor*") @ByRef Pointer input,
+                         @ByVal ExpandingArray3 kernel_size,
+                         @ByVal ExpandingArray3 stride,
+                         @ByVal ExpandingArray3 padding,
+                         @Cast("bool") boolean ceil_mode,
+                         @Cast("bool") boolean count_include_pad,
+                         @ByVal @Cast("c10::optional<int64_t>*") Pointer divisor_override);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.avg_pool3d
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::AvgPool3dFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::avg_pool3d(x, F::AvgPool3dFuncOptions(3).stride(2));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer avg_pool3d(@Cast("const torch::Tensor*") @ByRef Pointer input, @Const @ByRef AvgPool3dFuncOptions options);
+
+// ============================================================================
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer max_pool1d(@Cast("const torch::Tensor*") @ByRef Pointer input,
+                         @ByVal ExpandingArray1 kernel_size,
+                         @ByVal ExpandingArray1 stride,
+                         @ByVal ExpandingArray1 padding,
+                         @ByVal ExpandingArray1 dilation,
+                         @Cast("bool") boolean ceil_mode);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.max_pool1d
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::MaxPool1dFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::max_pool1d(x, F::MaxPool1dFuncOptions(3).stride(2));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer max_pool1d(@Cast("const torch::Tensor*") @ByRef Pointer input, @Const @ByRef MaxPool1dFuncOptions options);
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("std::tuple<torch::Tensor,torch::Tensor>*") Pointer max_pool1d_with_indices(
+  @Cast("const torch::Tensor*") @ByRef Pointer input,
+  @ByVal ExpandingArray1 kernel_size,
+  @ByVal ExpandingArray1 stride,
+  @ByVal ExpandingArray1 padding,
+  @ByVal ExpandingArray1 dilation,
+  @Cast("bool") boolean ceil_mode);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See the documentation for {@code torch::nn::functional::MaxPool1dFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::max_pool1d_with_indices(x, F::MaxPool1dFuncOptions(3).stride(2));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("std::tuple<torch::Tensor,torch::Tensor>*") Pointer max_pool1d_with_indices(@Cast("const torch::Tensor*") @ByRef Pointer input, @Const @ByRef MaxPool1dFuncOptions options);
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer max_pool2d(@Cast("const torch::Tensor*") @ByRef Pointer input,
+                         @ByVal ExpandingArray2 kernel_size,
+                         @ByVal ExpandingArray2 stride,
+                         @ByVal ExpandingArray2 padding,
+                         @ByVal ExpandingArray2 dilation,
+                         @Cast("bool") boolean ceil_mode);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.max_pool2d
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::MaxPool2dFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::max_pool2d(x, F::MaxPool2dFuncOptions(3).stride(2));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer max_pool2d(@Cast("const torch::Tensor*") @ByRef Pointer input, @Const @ByRef MaxPool2dFuncOptions options);
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("std::tuple<torch::Tensor,torch::Tensor>*") Pointer max_pool2d_with_indices(
+  @Cast("const torch::Tensor*") @ByRef Pointer input,
+  @ByVal ExpandingArray2 kernel_size,
+  @ByVal ExpandingArray2 stride,
+  @ByVal ExpandingArray2 padding,
+  @ByVal ExpandingArray2 dilation,
+  @Cast("bool") boolean ceil_mode);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See the documentation for {@code torch::nn::functional::MaxPool2dFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::max_pool2d_with_indices(x, F::MaxPool2dFuncOptions(3).stride(2));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("std::tuple<torch::Tensor,torch::Tensor>*") Pointer max_pool2d_with_indices(@Cast("const torch::Tensor*") @ByRef Pointer input, @Const @ByRef MaxPool2dFuncOptions options);
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer max_pool3d(@Cast("const torch::Tensor*") @ByRef Pointer input,
+                         @ByVal ExpandingArray3 kernel_size,
+                         @ByVal ExpandingArray3 stride,
+                         @ByVal ExpandingArray3 padding,
+                         @ByVal ExpandingArray3 dilation,
+                         @Cast("bool") boolean ceil_mode);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.max_pool3d
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::MaxPool3dFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::max_pool3d(x, F::MaxPool3dFuncOptions(3).stride(2));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer max_pool3d(@Cast("const torch::Tensor*") @ByRef Pointer input, @Const @ByRef MaxPool3dFuncOptions options);
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("std::tuple<torch::Tensor,torch::Tensor>*") Pointer max_pool3d_with_indices(
+  @Cast("const torch::Tensor*") @ByRef Pointer input,
+  @ByVal ExpandingArray3 kernel_size,
+  @ByVal ExpandingArray3 stride,
+  @ByVal ExpandingArray3 padding,
+  @ByVal ExpandingArray3 dilation,
+  @Cast("bool") boolean ceil_mode);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See the documentation for {@code torch::nn::functional::MaxPool3dFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::max_pool3d_with_indices(x, F::MaxPool3dFuncOptions(3).stride(2));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("std::tuple<torch::Tensor,torch::Tensor>*") Pointer max_pool3d_with_indices(@Cast("const torch::Tensor*") @ByRef Pointer input, @Const @ByRef MaxPool3dFuncOptions options);
+
+// ============================================================================
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("std::tuple<torch::Tensor,torch::Tensor>*") Pointer adaptive_max_pool1d_with_indices(
+    @Cast("const torch::Tensor*") @ByRef Pointer input, @ByVal ExpandingArray1 output_size);
+ // namespace detail
+
+/** See the documentation for {@code torch::nn::functional::AdaptiveMaxPool1dFuncOptions} class to learn what
+ *  optional arguments are supported for this functional.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::adaptive_max_pool1d_with_indices(x, F::AdaptiveMaxPool1dFuncOptions(3));
+ *  }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("std::tuple<torch::Tensor,torch::Tensor>*") Pointer adaptive_max_pool1d_with_indices(
+    @Cast("const torch::Tensor*") @ByRef Pointer input, @Cast("const AdaptiveMaxPool1dFuncOptions*") @ByRef Pointer options);
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer adaptive_max_pool1d(@Cast("const torch::Tensor*") @ByRef Pointer input,
+    @ByVal ExpandingArray1 output_size);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.adaptive_max_pool1d
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::AdaptiveMaxPool1dFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::adaptive_max_pool1d(x, F::AdaptiveMaxPool1dFuncOptions(3));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer adaptive_max_pool1d(@Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const AdaptiveMaxPool1dFuncOptions*") @ByRef Pointer options);
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("std::tuple<torch::Tensor,torch::Tensor>*") Pointer adaptive_max_pool2d_with_indices(
+    @Cast("const torch::Tensor*") @ByRef Pointer input, @ByVal ExpandingArrayWithOptionalElem2 output_size);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See the documentation for {@code torch::nn::functional::AdaptiveMaxPool2dFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::adaptive_max_pool2d_with_indices(x, F::AdaptiveMaxPool2dFuncOptions(3));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("std::tuple<torch::Tensor,torch::Tensor>*") Pointer adaptive_max_pool2d_with_indices(
+    @Cast("const torch::Tensor*") @ByRef Pointer input, @Cast("const AdaptiveMaxPool2dFuncOptions*") @ByRef Pointer options);
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer adaptive_max_pool2d(@Cast("const torch::Tensor*") @ByRef Pointer input,
+    @ByVal ExpandingArrayWithOptionalElem2 output_size);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.adaptive_max_pool2d
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::AdaptiveMaxPool2dFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::adaptive_max_pool2d(x, F::AdaptiveMaxPool2dFuncOptions(3));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer adaptive_max_pool2d(@Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const AdaptiveMaxPool2dFuncOptions*") @ByRef Pointer options);
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("std::tuple<torch::Tensor,torch::Tensor>*") Pointer adaptive_max_pool3d_with_indices(
+    @Cast("const torch::Tensor*") @ByRef Pointer input, @ByVal ExpandingArrayWithOptionalElem3 output_size);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See the documentation for {@code torch::nn::functional::AdaptiveMaxPool3dFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::adaptive_max_pool3d_with_indices(x, F::AdaptiveMaxPool3dFuncOptions(3));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("std::tuple<torch::Tensor,torch::Tensor>*") Pointer adaptive_max_pool3d_with_indices(
+    @Cast("const torch::Tensor*") @ByRef Pointer input, @Const @ByRef AdaptiveMaxPool3dFuncOptions options);
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer adaptive_max_pool3d(@Cast("const torch::Tensor*") @ByRef Pointer input,
+    @ByVal ExpandingArrayWithOptionalElem3 output_size);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.adaptive_max_pool3d
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::AdaptiveMaxPool3dFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::adaptive_max_pool3d(x, F::AdaptiveMaxPool3dFuncOptions(3));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer adaptive_max_pool3d(@Cast("const torch::Tensor*") @ByRef Pointer input,
+  @Const @ByRef AdaptiveMaxPool3dFuncOptions options);
+
+// ============================================================================
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer adaptive_avg_pool1d(@Cast("const torch::Tensor*") @ByRef Pointer input,
+    @ByVal ExpandingArray1 output_size);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.adaptive_avg_pool1d
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::AdaptiveAvgPool1dFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::adaptive_avg_pool1d(x, F::AdaptiveAvgPool1dFuncOptions(3));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer adaptive_avg_pool1d(@Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const AdaptiveAvgPool1dFuncOptions*") @ByRef Pointer options);
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer adaptive_avg_pool2d(@Cast("const torch::Tensor*") @ByRef Pointer input,
+    @ByVal ExpandingArrayWithOptionalElem2 output_size);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.adaptive_avg_pool2d
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::AdaptiveAvgPool2dFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::adaptive_avg_pool2d(x, F::AdaptiveAvgPool2dFuncOptions(3));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer adaptive_avg_pool2d(@Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const AdaptiveAvgPool2dFuncOptions*") @ByRef Pointer options);
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer adaptive_avg_pool3d(@Cast("const torch::Tensor*") @ByRef Pointer input,
+    @ByVal ExpandingArrayWithOptionalElem3 output_size);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.adaptive_avg_pool3d
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::AdaptiveAvgPool3dFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::adaptive_avg_pool3d(x, F::AdaptiveAvgPool3dFuncOptions(3));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer adaptive_avg_pool3d(@Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const AdaptiveAvgPool3dFuncOptions*") @ByRef Pointer options);
+
+// ============================================================================
+
+@Namespace("torch::nn::functional") public static native @Cast("int64_t*") @StdVector LongPointer _unpool_output_size(@Cast("const torch::Tensor*") @ByRef Pointer input,
+  @Cast("const IntArrayRef*") @ByRef Pointer kernel_size, @Cast("const IntArrayRef*") @ByRef Pointer stride,
+  @Cast("const IntArrayRef*") @ByRef Pointer padding, @Cast("const c10::optional<std::vector<int64_t> >*") @ByRef Pointer output_size);
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer max_unpool1d(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer indices,
+    @ByVal ExpandingArray1 kernel_size,
+    @ByVal ExpandingArray1 stride,
+    @ByVal ExpandingArray1 padding,
+    @Cast("const c10::optional<std::vector<int64_t> >*") @ByRef Pointer output_size);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.max_unpool1d
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::MaxUnpool1dFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::max_unpool1d(x, indices, F::MaxUnpool1dFuncOptions(3).stride(2).padding(1));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer max_unpool1d(@Cast("const torch::Tensor*") @ByRef Pointer input, @Cast("const torch::Tensor*") @ByRef Pointer indices,
+    @Cast("const MaxUnpool1dFuncOptions*") @ByRef Pointer options);
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer max_unpool2d(
+  @Cast("const torch::Tensor*") @ByRef Pointer input,
+  @Cast("const torch::Tensor*") @ByRef Pointer indices,
+  @ByVal ExpandingArray2 kernel_size,
+  @ByVal ExpandingArray2 stride,
+  @ByVal ExpandingArray2 padding,
+  @Cast("const c10::optional<std::vector<int64_t> >*") @ByRef Pointer output_size);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.max_unpool2d
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::MaxUnpool2dFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::max_unpool2d(x, indices, F::MaxUnpool2dFuncOptions(3).stride(2).padding(1));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer max_unpool2d(@Cast("const torch::Tensor*") @ByRef Pointer input, @Cast("const torch::Tensor*") @ByRef Pointer indices,
+  @Cast("const MaxUnpool2dFuncOptions*") @ByRef Pointer options);
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer max_unpool3d(
+  @Cast("const torch::Tensor*") @ByRef Pointer input,
+  @Cast("const torch::Tensor*") @ByRef Pointer indices,
+  @ByVal ExpandingArray3 kernel_size,
+  @ByVal ExpandingArray3 stride,
+  @ByVal ExpandingArray3 padding,
+  @Cast("const c10::optional<std::vector<int64_t> >*") @ByRef Pointer output_size);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.max_unpool3d
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::MaxUnpool3dFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::max_unpool3d(x, indices, F::MaxUnpool3dFuncOptions(3));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer max_unpool3d(@Cast("const torch::Tensor*") @ByRef Pointer input, @Cast("const torch::Tensor*") @ByRef Pointer indices,
+  @Cast("const MaxUnpool3dFuncOptions*") @ByRef Pointer options);
+
+// ============================================================================
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("std::tuple<torch::Tensor,torch::Tensor>*") Pointer fractional_max_pool2d_with_indices(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Const @ByRef ExpandingArray2 kernel_size,
+    @Cast("const c10::optional<torch::ExpandingArray<2> >*") @ByRef Pointer output_size,
+    @Cast("const c10::optional<torch::ExpandingArray<2,double> >*") @ByRef Pointer output_ratio,
+    @Cast("const torch::Tensor*") @ByRef Pointer _random_samples);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See the documentation for {@code torch::nn::functional::FractionalMaxPool2dFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::fractional_max_pool2d_with_indices(x, F::FractionalMaxPool2dFuncOptions(3).output_size(2));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("std::tuple<torch::Tensor,torch::Tensor>*") Pointer fractional_max_pool2d_with_indices(@Cast("const torch::Tensor*") @ByRef Pointer input, @Const @ByRef FractionalMaxPool2dFuncOptions options);
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer fractional_max_pool2d(@Cast("const torch::Tensor*") @ByRef Pointer input,
+                                    @ByVal ExpandingArray2 kernel_size,
+                                    @ByVal @Cast("c10::optional<torch::ExpandingArray<2> >*") Pointer output_size,
+                                    @ByVal @Cast("c10::optional<torch::ExpandingArray<2,double> >*") Pointer output_ratio,
+                                    @Cast("const torch::Tensor*") @ByRef Pointer _random_samples);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See the documentation for {@code torch::nn::functional::FractionalMaxPool2dFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::fractional_max_pool2d(x, F::FractionalMaxPool2dFuncOptions(3).output_size(2));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer fractional_max_pool2d(@Cast("const torch::Tensor*") @ByRef Pointer input, @Const @ByRef FractionalMaxPool2dFuncOptions options);
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("std::tuple<torch::Tensor,torch::Tensor>*") Pointer fractional_max_pool3d_with_indices(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Const @ByRef ExpandingArray3 kernel_size,
+    @Cast("const c10::optional<torch::ExpandingArray<3> >*") @ByRef Pointer output_size,
+    @Cast("const c10::optional<torch::ExpandingArray<3,double> >*") @ByRef Pointer output_ratio,
+    @Cast("const torch::Tensor*") @ByRef Pointer _random_samples);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See the documentation for {@code torch::nn::functional::FractionalMaxPool3dFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::fractional_max_pool3d_with_indices(x, F::FractionalMaxPool3dFuncOptions(3).output_size(2));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("std::tuple<torch::Tensor,torch::Tensor>*") Pointer fractional_max_pool3d_with_indices(@Cast("const torch::Tensor*") @ByRef Pointer input, @Const @ByRef FractionalMaxPool3dFuncOptions options);
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer fractional_max_pool3d(@Cast("const torch::Tensor*") @ByRef Pointer input,
+                                    @ByVal ExpandingArray3 kernel_size,
+                                    @ByVal @Cast("c10::optional<torch::ExpandingArray<3> >*") Pointer output_size,
+                                    @ByVal @Cast("c10::optional<torch::ExpandingArray<3,double> >*") Pointer output_ratio,
+                                    @Cast("const torch::Tensor*") @ByRef Pointer _random_samples);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See the documentation for {@code torch::nn::functional::FractionalMaxPool3dFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::fractional_max_pool3d(x, F::FractionalMaxPool3dFuncOptions(3).output_size(2));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer fractional_max_pool3d(@Cast("const torch::Tensor*") @ByRef Pointer input, @Const @ByRef FractionalMaxPool3dFuncOptions options);
+
+// ============================================================================
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer lp_pool1d(
+  @Cast("const torch::Tensor*") @ByRef Pointer input,
+  double norm_type,
+  @ByVal ExpandingArray1 kernel_size,
+  @ByVal ExpandingArray1 stride,
+  @Cast("bool") boolean ceil_mode);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.lp_pool1d
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::LPPool1dFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::lp_pool1d(x, F::LPPool1dFuncOptions(2, 3).stride(2));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer lp_pool1d(@Cast("const torch::Tensor*") @ByRef Pointer input, @Const @ByRef LPPool1dFuncOptions options);
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer lp_pool2d(
+  @Cast("const torch::Tensor*") @ByRef Pointer input,
+  double norm_type,
+  @ByVal ExpandingArray2 kernel_size,
+  @ByVal ExpandingArray2 stride,
+  @Cast("bool") boolean ceil_mode);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.lp_pool2d
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::LPPool2dFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::lp_pool2d(x, F::LPPool2dFuncOptions(2, {2, 3}).stride(2));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer lp_pool2d(@Cast("const torch::Tensor*") @ByRef Pointer input, @Const @ByRef LPPool2dFuncOptions options);
+
+ // namespace functional
+ // namespace nn
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/nn/options/pooling.h
+
+// #pragma once
+
+// #include <torch/arg.h>
+// #include <torch/csrc/WindowsTorchApiMacro.h>
+// #include <torch/expanding_array.h>
+// #include <torch/types.h>
+
+/** Options for a {@code D}-dimensional avgpool module. */
+
+/** {@code AvgPoolOptions} specialized for the {@code AvgPool1d} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  AvgPool1d model(AvgPool1dOptions(3).stride(2));
+ *  }</pre> */
+
+///
+
+/** {@code AvgPoolOptions} specialized for the {@code AvgPool2d} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  AvgPool2d model(AvgPool2dOptions({3, 2}).stride({2, 2}));
+ *  }</pre> */
+
+///
+
+/** {@code AvgPoolOptions} specialized for the {@code AvgPool3d} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  AvgPool3d model(AvgPool3dOptions(5).stride(2));
+ *  }</pre> */
+/** Options for {@code torch::nn::functional::avg_pool1d}.
+ * 
+ *  See the documentation for {@code torch::nn::AvgPool1dOptions} class to learn what
+ *  arguments are supported.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::avg_pool1d(x, F::AvgPool1dFuncOptions(3).stride(2));
+ *  }</pre> */
+ // namespace functional
+/** Options for {@code torch::nn::functional::avg_pool2d}.
+ * 
+ *  See the documentation for {@code torch::nn::AvgPool2dOptions} class to learn what
+ *  arguments are supported.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::avg_pool2d(x, F::AvgPool2dFuncOptions(3).stride(2));
+ *  }</pre> */
+ // namespace functional
+/** Options for {@code torch::nn::functional::avg_pool3d}.
+ * 
+ *  See the documentation for {@code torch::nn::AvgPool3dOptions} class to learn what
+ *  arguments are supported.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::avg_pool3d(x, F::AvgPool3dFuncOptions(3).stride(2));
+ *  }</pre> */
+ // namespace functional
+
+// ============================================================================
+
+/** Options for a {@code D}-dimensional maxpool module. */
+
+/** {@code MaxPoolOptions} specialized for the {@code MaxPool1d} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  MaxPool1d model(MaxPool1dOptions(3).stride(2));
+ *  }</pre> */
+
+///
+
+/** {@code MaxPoolOptions} specialized for the {@code MaxPool2d} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  MaxPool2d model(MaxPool2dOptions({3, 2}).stride({2, 2}));
+ *  }</pre> */
+
+///
+
+/** {@code MaxPoolOptions} specialized for the {@code MaxPool3d} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  MaxPool3d model(MaxPool3dOptions(3).stride(2));
+ *  }</pre> */
+/** Options for {@code torch::nn::functional::max_pool1d} and {@code torch::nn::functional::max_pool1d_with_indices}.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::max_pool1d(x, F::MaxPool1dFuncOptions(3).stride(2));
+ *  }</pre> */
+ // namespace functional
+/** Options for {@code torch::nn::functional::max_pool2d} and {@code torch::nn::functional::max_pool2d_with_indices}.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::max_pool2d(x, F::MaxPool2dFuncOptions(3).stride(2));
+ *  }</pre> */
+ // namespace functional
+/** Options for {@code torch::nn::functional::max_pool3d} and {@code torch::nn::functional::max_pool3d_with_indices}.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::max_pool3d(x, F::MaxPool3dFuncOptions(3).stride(2));
+ *  }</pre> */
+ // namespace functional
+
+// ============================================================================
+
+/** Options for a {@code D}-dimensional adaptive maxpool module. */
+
+/** {@code AdaptiveMaxPoolOptions} specialized for the {@code AdaptiveMaxPool1d} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  AdaptiveMaxPool1d model(AdaptiveMaxPool1dOptions(3));
+ *  }</pre> */
+
+///
+
+/** {@code AdaptiveMaxPoolOptions} specialized for the {@code AdaptiveMaxPool2d} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  AdaptiveMaxPool2d model(AdaptiveMaxPool2dOptions({3, 2}));
+ *  }</pre> */
+
+///
+
+/** {@code AdaptiveMaxPoolOptions} specialized for the {@code AdaptiveMaxPool3d} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  AdaptiveMaxPool3d model(AdaptiveMaxPool3dOptions(3));
+ *  }</pre> */
+/** Options for {@code torch::nn::functional::adaptive_max_pool1d} and {@code torch::nn::functional::adaptive_max_pool1d_with_indices}
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::adaptive_max_pool1d(x, F::AdaptiveMaxPool1dFuncOptions(3));
+ *  }</pre> */
+ // namespace functional
+/** Options for {@code torch::nn::functional::adaptive_max_pool2d} and {@code torch::nn::functional::adaptive_max_pool2d_with_indices}
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::adaptive_max_pool2d(x, F::AdaptiveMaxPool2dFuncOptions(3));
+ *  }</pre> */
+ // namespace functional
+/** Options for {@code torch::nn::functional::adaptive_max_pool3d} and {@code torch::nn::functional::adaptive_max_pool3d_with_indices}
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::adaptive_max_pool3d(x, F::AdaptiveMaxPool3dFuncOptions(3));
+ *  }</pre> */
+ // namespace functional
+
+// ============================================================================
+
+/** Options for a {@code D}-dimensional adaptive avgpool module. */
+
+/** {@code AdaptiveAvgPoolOptions} specialized for the {@code AdaptiveAvgPool1d} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  AdaptiveAvgPool1d model(AdaptiveAvgPool1dOptions(5));
+ *  }</pre> */
+
+///
+
+/** {@code AdaptiveAvgPoolOptions} specialized for the {@code AdaptiveAvgPool2d} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  AdaptiveAvgPool2d model(AdaptiveAvgPool2dOptions({3, 2}));
+ *  }</pre> */
+
+///
+
+/** {@code AdaptiveAvgPoolOptions} specialized for the {@code AdaptiveAvgPool3d} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  AdaptiveAvgPool3d model(AdaptiveAvgPool3dOptions(3));
+ *  }</pre> */
+/** Options for {@code torch::nn::functional::adaptive_avg_pool1d}.
+ * 
+ *  See the documentation for {@code torch::nn::AdaptiveAvgPool1dOptions} class to learn what
+ *  arguments are supported.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::adaptive_avg_pool1d(x, F::AdaptiveAvgPool1dFuncOptions(3));
+ *  }</pre> */
+ // namespace functional
+/** Options for {@code torch::nn::functional::adaptive_avg_pool2d}.
+ * 
+ *  See the documentation for {@code torch::nn::AdaptiveAvgPool2dOptions} class to learn what
+ *  arguments are supported.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::adaptive_avg_pool2d(x, F::AdaptiveAvgPool2dFuncOptions(3));
+ *  }</pre> */
+ // namespace functional
+/** Options for {@code torch::nn::functional::adaptive_avg_pool3d}.
+ * 
+ *  See the documentation for {@code torch::nn::AdaptiveAvgPool3dOptions} class to learn what
+ *  arguments are supported.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::adaptive_avg_pool3d(x, F::AdaptiveAvgPool3dFuncOptions(3));
+ *  }</pre> */
+ // namespace functional
+
+// ============================================================================
+
+/** Options for a {@code D}-dimensional maxunpool module. */
+
+/** {@code MaxUnpoolOptions} specialized for the {@code MaxUnpool1d} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  MaxUnpool1d model(MaxUnpool1dOptions(3).stride(2).padding(1));
+ *  }</pre> */
+
+///
+
+/** {@code MaxUnpoolOptions} specialized for the {@code MaxUnpool2d} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  MaxUnpool2d model(MaxUnpool2dOptions(3).stride(2).padding(1));
+ *  }</pre> */
+
+///
+
+/** {@code MaxUnpoolOptions} specialized for the {@code MaxUnpool3d} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  MaxUnpool3d model(MaxUnpool3dOptions(3).stride(2).padding(1));
+ *  }</pre> */
+
+// ============================================================================
+
+/** Options for a {@code D}-dimensional maxunpool functional. */
+
+/** {@code MaxUnpoolFuncOptions} specialized for {@code torch::nn::functional::max_unpool1d}.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::max_unpool1d(x, indices, F::MaxUnpool1dFuncOptions(3).stride(2).padding(1));
+ *  }</pre> */
+
+///
+
+/** {@code MaxUnpoolFuncOptions} specialized for {@code torch::nn::functional::max_unpool2d}.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::max_unpool2d(x, indices, F::MaxUnpool2dFuncOptions(3).stride(2).padding(1));
+ *  }</pre> */
+
+///
+
+/** {@code MaxUnpoolFuncOptions} specialized for {@code torch::nn::functional::max_unpool3d}.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::max_unpool3d(x, indices, F::MaxUnpool3dFuncOptions(3));
+ *  }</pre> */
+
+ // namespace functional
+
+// ============================================================================
+
+/** Options for a {@code D}-dimensional fractional maxpool module. */
+
+/** {@code FractionalMaxPoolOptions} specialized for the {@code FractionalMaxPool2d} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  FractionalMaxPool2d model(FractionalMaxPool2dOptions(5).output_size(1));
+ *  }</pre> */
+
+///
+
+/** {@code FractionalMaxPoolOptions} specialized for the {@code FractionalMaxPool3d} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  FractionalMaxPool3d model(FractionalMaxPool3dOptions(5).output_size(1));
+ *  }</pre> */
+/** Options for {@code torch::nn::functional::fractional_max_pool2d} and {@code torch::nn::functional::fractional_max_pool2d_with_indices}
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::fractional_max_pool2d(x, F::FractionalMaxPool2dFuncOptions(3).output_size(2));
+ *  }</pre> */
+ // namespace functional
+/** Options for {@code torch::nn::functional::fractional_max_pool3d} and {@code torch::nn::functional::fractional_max_pool3d_with_indices}
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::fractional_max_pool3d(x, F::FractionalMaxPool3dFuncOptions(3).output_size(2));
+ *  }</pre> */
+ // namespace functional
+
+// ============================================================================
+
+/** Options for a {@code D}-dimensional lppool module. */
+
+/** {@code LPPoolOptions} specialized for the {@code LPPool1d} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  LPPool1d model(LPPool1dOptions(1, 2).stride(5).ceil_mode(true));
+ *  }</pre> */
+
+///
+
+/** {@code LPPoolOptions} specialized for the {@code LPPool2d} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  LPPool2d model(LPPool2dOptions(1, std::vector<int64_t>({3, 4})).stride({5, 6}).ceil_mode(true));
+ *  }</pre> */
+/** Options for {@code torch::nn::functional::lp_pool1d}.
+ * 
+ *  See the documentation for {@code torch::nn::LPPool1dOptions} class to learn what
+ *  arguments are supported.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::lp_pool1d(x, F::LPPool1dFuncOptions(2, 3).stride(2));
+ *  }</pre> */
+ // namespace functional
+/** Options for {@code torch::nn::functional::lp_pool2d}.
+ * 
+ *  See the documentation for {@code torch::nn::LPPool2dOptions} class to learn what
+ *  arguments are supported.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  namespace F = torch::nn::functional;
+ *  F::lp_pool2d(x, F::LPPool2dFuncOptions(2, {2, 3}).stride(2));
+ *  }</pre> */
+ // namespace functional
+
+ // namespace nn
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/nn/functional/upsampling.h
+
+// #pragma once
+
+// #include <torch/nn/functional/pooling.h>
+// #include <torch/nn/options/upsampling.h>
+
+// #include <cmath>
+
+@Namespace("torch::nn::functional") public static native @Cast("int64_t*") @StdVector LongPointer _interp_output_size(
+  @Cast("int64_t") long dim,
+  @ByVal @Cast("std::tuple<torch::Tensor,c10::optional<std::vector<int64_t> >,c10::optional<std::vector<double> >,c10::optional<bool> >*") Pointer closed_over_args);
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer interpolate(
+  @Cast("const torch::Tensor*") @ByRef Pointer input,
+  @Cast("const c10::optional<std::vector<int64_t> >*") @ByRef Pointer size,
+  @Cast("const c10::optional<std::vector<double> >*") @ByRef Pointer scale_factor,
+  @ByVal mode_t mode,
+  @ByVal @Cast("c10::optional<bool>*") Pointer align_corners,
+  @ByVal @Cast("c10::optional<bool>*") Pointer recompute_scale_factor);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.interpolate
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::InterpolateFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::interpolate(input, F::InterpolateFuncOptions().size({4}).mode(torch::kNearest));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer interpolate(@Cast("const torch::Tensor*") @ByRef Pointer input, @Const @ByRef(nullValue = "InterpolateFuncOptions({})") InterpolateFuncOptions options);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer interpolate(@Cast("const torch::Tensor*") @ByRef Pointer input);
+
+ // namespace functional
+ // namespace nn
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/nn/options/upsampling.h
+
+// #pragma once
+
+// #include <c10/util/variant.h>
+// #include <torch/arg.h>
+// #include <torch/enum.h>
+// #include <torch/csrc/WindowsTorchApiMacro.h>
+// #include <torch/expanding_array.h>
+// #include <torch/types.h>
+
+// #include <vector>
+// Targeting ../UpsampleOptions.java
+
+
+// Targeting ../InterpolateFuncOptions.java
+
+
+
+ // namespace functional
+
+ // namespace nn
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/nn/functional/vision.h
+
+// #pragma once
+
+// #include <torch/nn/options/vision.h>
+// #include <torch/types.h>
+
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer affine_grid(
+    @Cast("const torch::Tensor*") @ByRef Pointer theta,
+    @Cast("const IntArrayRef*") @ByRef Pointer size,
+    @Cast("bool") boolean align_corners/*=false*/);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer affine_grid(
+    @Cast("const torch::Tensor*") @ByRef Pointer theta,
+    @Cast("const IntArrayRef*") @ByRef Pointer size);
+
+// ============================================================================
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer grid_sample(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer grid,
+    @ByVal mode_t mode,
+    @ByVal padding_mode_t padding_mode,
+    @ByVal @Cast("c10::optional<bool>*") Pointer align_corners);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.grid_sample
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::GridSampleFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::grid_sample(input, grid, F::GridSampleFuncOptions().mode(torch::kBilinear).padding_mode(torch::kZeros).align_corners(true));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer grid_sample(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer grid,
+    @Const @ByRef(nullValue = "GridSampleFuncOptions({})") GridSampleFuncOptions options);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer grid_sample(
+    @Cast("const torch::Tensor*") @ByRef Pointer input,
+    @Cast("const torch::Tensor*") @ByRef Pointer grid);
+
+ // namespace functional
+ // namespace nn
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/nn/options/vision.h
+
+// #pragma once
+
+// #include <torch/arg.h>
+// #include <torch/enum.h>
+// #include <torch/csrc/WindowsTorchApiMacro.h>
+// #include <torch/types.h>
+// Targeting ../GridSampleFuncOptions.java
+
+
+
+ // namespace functional
+ // namespace nn
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/nn/functional/instancenorm.h
+
+// #pragma once
+
+// #include <torch/nn/options/instancenorm.h>
+
+// #ifndef DOXYGEN_SHOULD_SKIP_THIS
+@Namespace("torch::nn::functional::detail") public static native @ByVal @Cast("torch::Tensor*") Pointer instance_norm(@Cast("const torch::Tensor*") @ByRef Pointer input, @Cast("const torch::Tensor*") @ByRef Pointer running_mean,
+    @Cast("const torch::Tensor*") @ByRef Pointer running_var, @Cast("const torch::Tensor*") @ByRef Pointer weight, @Cast("const torch::Tensor*") @ByRef Pointer bias,
+    @Cast("bool") boolean use_input_stats, double momentum, double eps);
+ // namespace detail
+// #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+
+/** See https://pytorch.org/docs/master/nn.functional.html#torch.nn.functional.instance_norm
+/** about the exact behavior of this functional.
+/**
+/** See the documentation for {@code torch::nn::functional::InstanceNormFuncOptions} class to learn what
+/** optional arguments are supported for this functional.
+/**
+/** Example:
+/** <pre>{@code
+/** namespace F = torch::nn::functional;
+/** F::instance_norm(input, F::InstanceNormFuncOptions().running_mean(mean).running_var(variance).weight(weight).bias(bias).momentum(0.1).eps(1e-5));
+/** }</pre> */
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer instance_norm(@Cast("const torch::Tensor*") @ByRef Pointer input, @Const @ByRef(nullValue = "InstanceNormFuncOptions({})") InstanceNormFuncOptions options);
+@Namespace("torch::nn::functional") public static native @ByVal @Cast("torch::Tensor*") Pointer instance_norm(@Cast("const torch::Tensor*") @ByRef Pointer input);
+
+ // namespace functional
+ // namespace nn
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/nn/options/instancenorm.h
+
+// #pragma once
+
+// #include <torch/arg.h>
+// #include <torch/csrc/WindowsTorchApiMacro.h>
+// #include <torch/nn/options/batchnorm.h>
+// #include <torch/types.h>
+// Targeting ../InstanceNormOptions.java
+
+
+
+/** Options for the {@code InstanceNorm1d} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  InstanceNorm1d model(InstanceNorm1dOptions(4).eps(0.5).momentum(0.1).affine(false).track_running_stats(true));
+ *  }</pre> */
+
+///
+
+/** Options for the {@code InstanceNorm2d} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  InstanceNorm2d model(InstanceNorm2dOptions(4).eps(0.5).momentum(0.1).affine(false).track_running_stats(true));
+ *  }</pre> */
+
+///
+
+/** Options for the {@code InstanceNorm3d} module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  InstanceNorm3d model(InstanceNorm3dOptions(4).eps(0.5).momentum(0.1).affine(false).track_running_stats(true));
+ *  }</pre> */
+// Targeting ../InstanceNormFuncOptions.java
+
+
+
+ // namespace functional
+
+ // namespace nn
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/nn/init.h
+
+// #pragma once
+
+// #include <torch/csrc/WindowsTorchApiMacro.h>
+// #include <torch/enum.h>
+// #include <torch/types.h>
+
+ // namespace init
+ // nn
+
+/** Return the recommended gain value for the given nonlinearity function. */
+
+/** Fills the given {@code tensor} with the provided {@code value} in-place, and returns it.
+ *  No gradient will be recorded for this operation. */
+
+/** Fills the given {@code tensor} with the Dirac delta function in-place, and returns
+ *  it. No gradient will be recorded for this operation. */
+
+/** Fills the given 2-dimensional {@code matrix} with an identity matrix.
+ *  No gradient will be recorded for this operation. */
+
+/** Fills the given 2-dimensional {@code matrix} with values drawn from a normal
+ *  distribution parameterized by {@code mean} and {@code std}.
+ *  No gradient will be recorded for this operation. */
+
+/** Fills the given {@code tensor} with ones.
+ *  No gradient will be recorded for this operation. */
+
+/** Fills the input {@code Tensor} with a (semi) orthogonal matrix, as described in
+ *  "Exact solutions to the nonlinear dynamics of learning in deep linear neural
+ *  networks" - Saxe, A. et al. (2013). The input tensor must have at least 2
+ *  dimensions, and for tensors with more than 2 dimensions the trailing
+ *  dimensions are flattened.
+ *  No gradient will be recorded for this operation. */
+
+/** Fills the 2D input {@code Tensor} as a sparse matrix, where the
+ *  non-zero elements will be drawn from a centered normal distribution
+ *  with the given standard deviation {@code std}, as described in "Deep learning via
+ *  Hessian-free optimization" - Martens, J. (2010). The {@code sparsity} is a real
+ *  value between 0 and 1 that controls the fraction of elements in each column
+ *  to be set to zero.
+ *  No gradient will be recorded for this operation. */
+
+/** Fills the given 2-dimensional {@code matrix} with values drawn from a uniform
+ *  distribution parameterized by {@code low} and {@code high}.
+ *  No gradient will be recorded for this operation. */
+
+/** Fills the input {@code Tensor} with values according to the method
+ *  described in "Delving deep into rectifiers: Surpassing human-level
+ *  performance on ImageNet classification" - He, K. et al. (2015), using a
+ *  normal distribution. Also known as He initialization.
+ *  No gradient will be recorded for this operation. */
+
+/** Fills the input {@code Tensor} with values according to the method
+ *  described in "Delving deep into rectifiers: Surpassing human-level
+ *  performance on ImageNet classification" - He, K. et al. (2015), using a
+ *  uniform distribution. Also known as He initialization.
+ *  No gradient will be recorded for this operation. */
+
+/** Fills the input {@code Tensor} with values according to the method
+ *  described in "Understanding the difficulty of training deep feedforward
+ *  neural networks" - Glorot, X. & Bengio, Y. (2010). Values are scaled by the
+ *  {@code gain} parameter. No gradient will be recorded for this operation. */
+
+/** Fills the input {@code Tensor} with values according to the method
+ *  described in "Understanding the difficulty of training deep feedforward
+ *  neural networks" - Glorot, X. & Bengio, Y. (2010), using a uniform
+ *  distribution. Values are scaled by the {@code gain} parameter
+ *  No gradient will be recorded for this operation. */
+
+/** Fills the given {@code tensor} with zeros.
+ *  No gradient will be recorded for this operation. */
+
+ // namespace init
+ // namespace nn
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/nn/module.h
+
+// #pragma once
+
+// #include <torch/nn/modules/container/any_module_holder.h>
+// #include <torch/nn/modules/container/any_value.h>
+// #include <torch/nn/pimpl.h>
+// #include <torch/ordered_dict.h>
+// #include <torch/serialize/archive.h>
+// #include <torch/types.h>
+
+// #include <ATen/ATen.h>
+
+// #include <functional>
+// #include <iosfwd>
+// #include <map>
+// #include <memory>
+// #include <string>
+// #include <type_traits>
+// Targeting ../Module.java
+
+
+
+/** Serialize a {@code Module} pointer into an {@code OutputArchive}. */
+@Namespace("torch::nn") public static native @ByRef @Name("operator <<") OutputArchive shiftLeft(
+    @ByRef OutputArchive archive,
+    @Cast("const std::shared_ptr<torch::nn::Module>*") @ByRef Pointer module);
+
+/** Deserializes a {@code Module} from an {@code InputArchive}. */
+@Namespace("torch::nn") public static native @ByRef @Name("operator >>") InputArchive shiftRight(
+    @ByRef InputArchive archive,
+    @Cast("const std::shared_ptr<torch::nn::Module>*") @ByRef Pointer module);
+
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ nn::Module ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ // namespace nn
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/nn/modules.h
+
+// #pragma once
+
+// Common
+// #include <torch/nn/modules/common.h>
+
+// Containers
+// #include <torch/nn/modules/container/any.h>
+// #include <torch/nn/modules/container/functional.h>
+// #include <torch/nn/modules/container/modulelist.h>
+// #include <torch/nn/modules/container/named_any.h>
+// #include <torch/nn/modules/container/sequential.h>
+
+// Layers
+// #include <torch/nn/modules/adaptive.h>
+// #include <torch/nn/modules/batchnorm.h>
+// #include <torch/nn/modules/instancenorm.h>
+// #include <torch/nn/modules/conv.h>
+// #include <torch/nn/modules/dropout.h>
+// #include <torch/nn/modules/distance.h>
+// #include <torch/nn/modules/embedding.h>
+// #include <torch/nn/modules/fold.h>
+// #include <torch/nn/modules/linear.h>
+// #include <torch/nn/modules/loss.h>
+// #include <torch/nn/modules/padding.h>
+// #include <torch/nn/modules/pooling.h>
+// #include <torch/nn/modules/rnn.h>
+// #include <torch/nn/modules/pixelshuffle.h>
+// #include <torch/nn/modules/upsampling.h>
+// #include <torch/nn/modules/activation.h>
+// #include <torch/nn/modules/normalization.h>
+
+
+// Parsed from torch/csrc/api/include/torch/nn/modules/linear.h
+
+// #pragma once
+
+// #include <torch/nn/cloneable.h>
+// #include <torch/nn/module.h>
+// #include <torch/nn/options/linear.h>
+// #include <torch/nn/pimpl.h>
+// #include <torch/nn/functional/linear.h>
+// #include <torch/types.h>
+
+// #include <cstddef>
+// #include <vector>
+// Targeting ../IdentityImpl.java
+
+
+
+/** A {@code ModuleHolder} subclass for {@code IdentityImpl}.
+ *  See the documentation for {@code IdentityImpl} class to learn what methods it
+ *  provides, or the documentation for {@code ModuleHolder} to learn about PyTorch's
+ *  module storage semantics. */
+
+// Targeting ../LinearImpl.java
+
+
+
+/** A {@code ModuleHolder} subclass for {@code LinearImpl}.
+ *  See the documentation for {@code LinearImpl} class to learn what methods it
+ *  provides, and examples of how to use {@code Linear} with {@code torch::nn::LinearOptions}.
+ *  See the documentation for {@code ModuleHolder} to learn about PyTorch's
+ *  module storage semantics. */
+
+
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Flatten ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+/** A placeholder for Flatten operator
+ *  See https://pytorch.org/docs/master/nn.html#torch.nn.Flatten to learn
+ *  about the exact behavior of this module.
+ * 
+ *  See the documentation for {@code torch::nn::FlattenOptions} class to learn what
+ *  constructor arguments are supported for this module.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  Flatten model(FlattenOptions().start_dim(2).end_dim(4));
+ *  }</pre> */
+
+/** A {@code ModuleHolder} subclass for {@code FlattenImpl}.
+ *  See the documentation for {@code FlattenImpl} class to learn what methods it
+ *  provides, and examples of how to use {@code Flatten} with {@code torch::nn::FlattenOptions}.
+ *  See the documentation for {@code ModuleHolder} to learn about PyTorch's
+ *  module storage semantics. */
+
+// Targeting ../BilinearImpl.java
+
+
+
+/** A {@code ModuleHolder} subclass for {@code BilinearImpl}.
+ *  See the documentation for {@code BilinearImpl} class to learn what methods it
+ *  provides, and examples of how to use {@code Bilinear} with {@code torch::nn::BilinearOptions}.
+ *  See the documentation for {@code ModuleHolder} to learn about PyTorch's
+ *  module storage semantics. */
+
+
+ // namespace nn
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/nn/options.h
+
+// #pragma once
+
+// #include <torch/nn/options/batchnorm.h>
+// #include <torch/nn/options/conv.h>
+// #include <torch/nn/options/dropout.h>
+// #include <torch/nn/options/fold.h>
+// #include <torch/nn/options/linear.h>
+// #include <torch/nn/options/loss.h>
+// #include <torch/nn/options/normalization.h>
+// #include <torch/nn/options/padding.h>
+// #include <torch/nn/options/pooling.h>
+// #include <torch/nn/options/vision.h>
+// #include <torch/nn/options/rnn.h>
+// #include <torch/nn/options/pixelshuffle.h>
+// #include <torch/nn/options/upsampling.h>
+
+
+// Parsed from torch/csrc/api/include/torch/nn/pimpl.h
+
+// #pragma once
+
+// #include <torch/arg.h>
+// #include <torch/detail/static.h>
+// #include <torch/serialize/archive.h>
+// #include <torch/types.h>
+
+// #include <torch/csrc/utils/variadic.h>
+
+// #include <memory>
+// #include <type_traits>
+// #include <utility>
+// Dump all the template metaprogramming in this file.
+// #include <torch/csrc/api/include/torch/nn/pimpl-inl.h>
+ // namespace detail
+
+/** A {@code ModuleHolder} is essentially a wrapper around {@code std::shared_ptr<M>} where
+ *  {@code M} is an {@code nn::Module} subclass, with convenient constructors defined for
+ *  the kind of constructions we want to allow for our modules. */
+
+/** Pretty prints the given {@code Module} into the {@code ostream}. */
+
+/** Serializes a {@code ModuleHolder} into an {@code OutputArchive}. */
+
+/** Deserializes a {@code ModuleHolder} from an {@code InputArchive}. */
+
+ // namespace nn
+ // namespace torch
+
+/** Defines a class {@code Name} which inherits from {@code nn::ModuleHolder} to provide a
+ *  wrapper over a {@code std::shared_ptr<Impl>}. */
+// #define TORCH_MODULE_IMPL(Name, Impl)
+//   class Name : public torch::nn::ModuleHolder<Impl> { /* NOLINT */
+//    public:
+//     using torch::nn::ModuleHolder<Impl>::ModuleHolder;
+//   }
+
+/** Like {@code TORCH_MODULE_IMPL}, but defaults the {@code Impl} name to {@code <Name>Impl}. */
+// #define TORCH_MODULE(Name) TORCH_MODULE_IMPL(Name, Name##Impl)
+
+
+// Parsed from torch/csrc/api/include/torch/nn/utils.h
+
+// #pragma once
+
+// #include <torch/nn/utils/clip_grad.h>
+// #include <torch/nn/utils/convert_parameters.h>
+// #include <torch/nn/utils/rnn.h>
+
+
+// Parsed from torch/csrc/api/include/torch/optim.h
+
+// #pragma once
+
+// #include <torch/optim/adagrad.h>
+// #include <torch/optim/adam.h>
+// #include <torch/optim/adamw.h>
+// #include <torch/optim/lbfgs.h>
+// #include <torch/optim/optimizer.h>
+// #include <torch/optim/rmsprop.h>
+// #include <torch/optim/sgd.h>
+
+
+// Parsed from torch/csrc/api/include/torch/optim/adagrad.h
+
+// #pragma once
+
+// #include <torch/nn/pimpl.h>
+// #include <torch/optim/optimizer.h>
+// #include <torch/optim/serialize.h>
+// #include <torch/serialize/archive.h>
+// #include <torch/types.h>
+
+// #include <utility>
+// #include <vector>
+// Targeting ../OutputArchive.java
+
+
+// Targeting ../InputArchive.java
+
+
+ // namespace serialize
+
+// Targeting ../AdagradOptions.java
+
+
+// Targeting ../AdagradParamState.java
+
+
+// Targeting ../Adagrad.java
+
+
+ // namespace optim
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/optim/adam.h
+
+// #pragma once
+
+// #include <torch/arg.h>
+// #include <torch/nn/module.h>
+// #include <torch/optim/optimizer.h>
+// #include <torch/optim/serialize.h>
+
+// #include <utility>
+// #include <vector>
+ // namespace serialize
+
+// Targeting ../AdamOptions.java
+
+
+// Targeting ../AdamParamState.java
+
+
+// Targeting ../Adam.java
+
+
+ // namespace optim
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/optim/adamw.h
+
+// #pragma once
+
+// #include <torch/arg.h>
+// #include <torch/nn/module.h>
+// #include <torch/optim/optimizer.h>
+// #include <torch/optim/serialize.h>
+
+// #include <utility>
+// #include <vector>
+ // namespace serialize
+
+// Targeting ../AdamWOptions.java
+
+
+// Targeting ../AdamWParamState.java
+
+
+// Targeting ../AdamW.java
+
+
+ // namespace optim
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/optim/lbfgs.h
+
+// #pragma once
+
+// #include <torch/arg.h>
+// #include <torch/nn/module.h>
+// #include <torch/optim/optimizer.h>
+// #include <torch/optim/serialize.h>
+// #include <torch/serialize/archive.h>
+
+// #include <deque>
+// #include <functional>
+// #include <memory>
+// #include <vector>
+// Targeting ../LBFGSOptions.java
+
+
+// Targeting ../LBFGSParamState.java
+
+
+// Targeting ../LBFGS.java
+
+
+ // namespace optim
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/optim/optimizer.h
+
+// #pragma once
+
+// #include <ATen/Tensor.h>
+// #include <c10/util/flat_hash_map.h>
+// #include <c10/util/Exception.h>
+
+// #include <torch/csrc/WindowsTorchApiMacro.h>
+
+// #include <algorithm>
+// #include <functional>
+// #include <iterator>
+// #include <memory>
+// #include <string>
+// #include <vector>
 // Targeting ../Tensor.java
 
 
-
-@Namespace("at") public static native @Cast("int64_t") long get_device(@ByVal Tensor self);
-
-
-
-
-// Helper creator for Tensor class which doesn't requires the users to pass
-// in an intrusive_ptr instead it just converts the argument passed to
-// requested intrusive_ptr type.
-
- // namespace detail
-
-@Namespace("at") public static native @ByVal DispatchKey legacyExtractDispatchKey(@Const @ByRef Tensor t);
-
  // namespace at
+ // namespace serialize
+
+// Targeting ../OptimizerParamState.java
 
 
-// Parsed from torch/script.h
+// Targeting ../OptimizerOptions.java
+
+
+
+/** Stores parameters in the param_group and stores a pointer to the OptimizerOptions */
+// Targeting ../Optimizer.java
+
+
+
+/* How do we decide whether to serialize undefined tensors or
+  c10::nullopt values into the output archive?
+Answer: we strictly follow the behavior of Python API. To be more specific:
+
+For optimizer options:
+a) For undefined tensor: currently no tensor is used as an options argument in Python API,
+   so we don't need to worry about it now.
+b) For c10::nullopt value: we serialize c10::nullopt values into the output archive,
+   to follow the exact same behavior as Python API.
+
+For optimizer param state:
+a) For undefined tensor: in param state, undefined tensor in C++ impl is equivalent to
+   missing key in Python impl. Since we don't serialize missing keys in Python API,
+   we skip undefined tensors when serializing the param state.
+b) For c10::nullopt value: in param state, c10::nullopt value in C++ impl is equivalent to
+   missing key in Python impl. Since we don't serialize missing keys in Python API,
+   we skip c10::nullopt values when serializing the param state. */
+
+/** Serializes an {@code Optimizer} into an {@code OutputArchive}. */
+@Namespace("torch::optim") public static native @ByRef @Name("operator <<") OutputArchive shiftLeft(
+    @ByRef OutputArchive archive,
+    @Const @ByRef Optimizer optimizer);
+
+/** Deserializes a {@code Tensor} from an {@code InputArchive}. */
+@Namespace("torch::optim") public static native @ByRef @Name("operator >>") InputArchive shiftRight(
+    @ByRef InputArchive archive,
+    @ByRef Optimizer optimizer);
+
+ // namespace optim
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/optim/rmsprop.h
 
 // #pragma once
 
-// #include <torch/csrc/api/include/torch/types.h>
-// #include <torch/csrc/autograd/generated/variable_factories.h>
-// #include <torch/csrc/autograd/grad_mode.h>
-// #include <torch/csrc/jit/runtime/custom_operator.h>
-// #include <torch/csrc/jit/serialization/import.h>
-// #include <torch/csrc/jit/serialization/pickle.h>
-// #include <torch/csrc/autograd/custom_function.h>
-// #include <torch/custom_class.h>
+// #include <torch/arg.h>
+// #include <torch/nn/module.h>
+// #include <torch/optim/optimizer.h>
+// #include <torch/optim/serialize.h>
+// #include <torch/serialize/archive.h>
+// #include <torch/types.h>
+
+// #include <functional>
+// #include <memory>
+// #include <string>
+// #include <vector>
+ // namespace serialize
+
+// Targeting ../RMSpropOptions.java
+
+
+// Targeting ../RMSpropParamState.java
+
+
+// Targeting ../RMSprop.java
+
+
+ // namespace optim
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/optim/sgd.h
+
+// #pragma once
+
+// #include <torch/arg.h>
+// #include <torch/nn/module.h>
+// #include <torch/optim/optimizer.h>
+// #include <torch/optim/serialize.h>
+// #include <torch/serialize/archive.h>
+// #include <torch/types.h>
+
+// #include <cstddef>
+// #include <utility>
+// #include <vector>
+ // namespace serialize
+
+// Targeting ../SGDOptions.java
+
+
+// Targeting ../SGDParamState.java
+
+
+// Targeting ../SGD.java
+
+
+ // namespace optim
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/serialize.h
+
+// #pragma once
+
+// #include <torch/serialize/archive.h>
+// #include <torch/serialize/tensor.h>
+// #include <torch/csrc/WindowsTorchApiMacro.h>
+
+// #include <utility>
+
+/** Serializes the given {@code value}.
+ *  There must be an overload of {@code operator<<} between {@code serialize::OutputArchive}
+ *  and {@code Value} for this method to be well-formed. Currently, such an overload
+ *  is provided for (subclasses of):
+ * 
+ *  - {@code torch::nn::Module},
+ *  - {@code torch::optim::Optimizer}
+ *  - {@code torch::Tensor}
+ * 
+ *  To perform the serialization, a {@code serialize::OutputArchive} is constructed,
+ *  and all arguments after the {@code value} are forwarded to its {@code save_to} method.
+ *  For example, you can pass a filename, or an {@code ostream}.
+ * 
+ *  \rst
+ *  .. code-block:: cpp
+ * 
+ *    torch::nn::Linear model(3, 4);
+ *    torch::save(model, "model.pt");
+ * 
+ *    torch::optim::SGD sgd(/*lr=* /0.9);
+ *    std::ostringstream stream;
+ *    // Note that the same stream cannot be used in multiple torch::save(...)
+ *    // invocations, otherwise the header will be corrupted.
+ *    torch::save(sgd, stream);
+ * 
+ *    auto tensor = torch::ones({3, 4});
+ *    torch::save(tensor, "my_tensor.pt");
+ *  \endrst */
+
+/** Serializes the given {@code tensor_vec} of type {@code std::vector<torch::Tensor>}.
+ * 
+ *  To perform the serialization, a {@code serialize::OutputArchive} is constructed,
+ *  and all arguments after the {@code tensor_vec} are forwarded to its {@code save_to}
+ *  method. For example, you can pass a filename, or an {@code ostream}.
+ * 
+ *  \rst
+ *  .. code-block:: cpp
+ * 
+ *    std::vector<torch::Tensor> tensor_vec = { torch::randn({1, 2}), torch::randn({3, 4}) };
+ *    torch::save(tensor_vec, "my_tensor_vec.pt");
+ * 
+ *    std::vector<torch::Tensor> tensor_vec = { torch::randn({5, 6}), torch::randn({7, 8}) };
+ *    std::ostringstream stream;
+ *    // Note that the same stream cannot be used in multiple torch::save(...)
+ *    // invocations, otherwise the header will be corrupted.
+ *    torch::save(tensor_vec, stream);
+ *  \endrst */
+
+/** Deserializes the given {@code value}.
+ *  There must be an overload of {@code operator>>} between {@code serialize::InputArchive}
+ *  and {@code Value} for this method to be well-formed. Currently, such an overload
+ *  is provided for (subclasses of):
+ * 
+ *  - {@code torch::nn::Module},
+ *  - {@code torch::optim::Optimizer}
+ *  - {@code torch::Tensor}
+ * 
+ *  To perform the serialization, a {@code serialize::InputArchive} is constructed,
+ *  and all arguments after the {@code value} are forwarded to its {@code load_from} method.
+ *  For example, you can pass a filename, or an {@code istream}.
+ * 
+ *  \rst
+ *  .. code-block:: cpp
+ * 
+ *    torch::nn::Linear model(3, 4);
+ *    torch::load(model, "model.pt");
+ * 
+ *    torch::optim::SGD sgd(/*lr=* /0.9);
+ *    std::istringstream stream("...");
+ *    torch::load(sgd, stream);
+ * 
+ *    auto tensor = torch::ones({3, 4});
+ *    torch::load(tensor, "my_tensor.pt");
+ *  \endrst */
+
+/** Deserializes the given {@code tensor_vec} of type {@code std::vector<torch::Tensor>}.
+ * 
+ *  To perform the serialization, a {@code serialize::InputArchive} is constructed,
+ *  and all arguments after the {@code value} are forwarded to its {@code load_from} method.
+ *  For example, you can pass a filename, or an {@code istream}.
+ * 
+ *  \rst
+ *  .. code-block:: cpp
+ * 
+ *    std::vector<torch::Tensor> tensor_vec;
+ *    torch::load(tensor_vec, "my_tensor_vec.pt");
+ * 
+ *    std::vector<torch::Tensor> tensor_vec;
+ *    std::istringstream stream("...");
+ *    torch::load(tensor_vec, stream);
+ *  \endrst */
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/types.h
+
+// #pragma once
 
 // #include <ATen/ATen.h>
+
+// #include <c10/util/Optional.h>
+
+// #include <torch/csrc/autograd/generated/variable_factories.h>
+// #include <torch/csrc/autograd/variable.h>
+
+// NOTE [ Exposing declarations in `at::` to `torch::` ]
+//
+// The following line `using namespace at;` is responsible for exposing all declarations in
+// `at::` namespace to `torch::` namespace.
+//
+// According to the rules laid out in
+// https://en.cppreference.com/w/cpp/language/qualified_lookup, section "Namespace members":
+// ```
+// Qualified lookup within the scope of a namespace N first considers all declarations that are
+// located in N and all declarations that are located in the inline namespace members of N
+// (and, transitively, in their inline namespace members). If there are no declarations in that set
+// then it considers declarations in all namespaces named by using-directives found in N and
+// in all transitive inline namespace members of N.
+// ```
+//
+// This means that if both `at::` and `torch::` namespaces have a function with the same signature
+// (e.g. both `at::func()` and `torch::func()` exist), after `namespace torch { using namespace at; }`,
+// when we call `torch::func()`, the `func()` function defined in `torch::` namespace will always
+// be called, and the `func()` function defined in `at::` namespace is always hidden. // NOLINT
+
+/** Fixed width dtypes. */
+
+
+
+
+
+
+
+
+
+/** Rust-style short dtypes. */
+
+
+
+
+
+
+
+
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/utils.h
+
+// #pragma once
+
+// #include <ATen/Parallel.h>
+// #include <ATen/record_function.h>
+// #include <torch/csrc/autograd/grad_mode.h>
+// #include <torch/csrc/api/include/torch/types.h>
+// #include <cstdint>
+
+/** A RAII, thread-local guard that disabled gradient calculation.
+ * 
+ *  Disabling gradient calculation is useful for inference, when you are sure
+ *  that you will not call {@code at::Tensor::backward}. It will reduce memory
+ *  consumption for computations that would otherwise have {@code requires_grad() == true}.
+ * 
+ *  In this mode, the result of every computation will have
+ *  {@code requires_grad() == false}, even when the inputs have {@code requires_grad() == true}.
+ * 
+ *  This context manager is thread-local; it will not affect computation
+ *  in other threads.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  auto x = torch::tensor({1.}, torch::requires_grad());
+ *  {
+ *    torch::NoGradGuard no_grad;
+ *    auto y = x * 2;
+ *    std::cout << y.requires_grad() << std::endl; // prints `false`
+ *  }
+ *  {
+ *    auto doubler = [](torch::Tensor x) {
+ *      torch::NoGradGuard no_grad;
+ *      return x * 2;
+ *    };
+ *    auto z = doubler(x);
+ *    std::cout << z.requires_grad() << std::endl; // prints `false`
+ *  }
+ *  }</pre> */
+
+///
+///
+///
+///
+
+/** A RAII, thread-local guard that sets gradient calculation to on or off.
+ * 
+ *  {@code }AutoGradMode{@code } will enable or disable grads based on its argument {@code enabled}.
+ * 
+ *  This context manager is thread-local; it will not affect computation
+ *  in other threads.
+ * 
+ *  @param enabled: Flag whether to enable grad ({@code }true{@code }), or disable
+ *               ({@code }false{@code }). This can be used to conditionally enable
+ *               gradients.
+ * 
+ *  Example:
+ *  <pre>{@code
+ *  auto x = torch::tensor({1.}, torch::requires_grad());
+ *  {
+ *    torch::AutoGradMode enable_grad(true);
+ *    auto y = x * 2;
+ *    std::cout << y.requires_grad() << std::endl; // prints `true`
+ *  }
+ *  {
+ *    torch::AutoGradMode enable_grad(false);
+ *    auto y = x * 2;
+ *    std::cout << y.requires_grad() << std::endl; // prints `false`
+ *  }
+ *  }</pre> */
+
+/** Sets the global random seed for all newly created CPU and CUDA tensors. */
+
+// Called during new thread initialization
+
+// Returns the number of threads used in parallel region.
+
+// Sets the number of threads to be used in parallel region.
+
+// Returns the number of threads used for inter-op parallelism.
+
+// Sets the number of threads to be used for inter-op parallelism.
+
+// Returns true if both t1, t2 are undefined or both are defined and equal
+@Namespace("torch") public static native @Cast("bool") boolean equal_if_defined(@ByVal @Cast("torch::Tensor*") Pointer t1, @ByVal @Cast("torch::Tensor*") Pointer t2);
+
+// RecordFunction API
+
+ // namespace torch
+
+
+// Parsed from torch/csrc/api/include/torch/autograd.h
+
+// #pragma once
+
+// #include <torch/csrc/autograd/autograd.h>
+// #include <torch/csrc/autograd/custom_function.h>
 
 
 }
