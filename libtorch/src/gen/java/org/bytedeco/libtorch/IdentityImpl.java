@@ -35,5 +35,5 @@ public class IdentityImpl extends CloneableIdentityImpl {
   /** Pretty prints the {@code Identity} module into the given {@code stream}. */
   public native void pretty_print(@Cast("std::ostream*") @ByRef Pointer stream);
 
-  public native @ByVal @Cast("torch::Tensor*") Pointer forward(@Cast("const torch::Tensor*") @ByRef Pointer input);
+  public native @ByVal Tensor forward(@Const @ByRef Tensor input);
 }

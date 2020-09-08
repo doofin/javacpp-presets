@@ -5,6 +5,7 @@ package org.bytedeco.libtorch;
 import org.bytedeco.javacpp.Loader;
 import org.bytedeco.javacpp.Pointer;
 import org.bytedeco.javacpp.annotation.ByVal;
+import org.bytedeco.javacpp.annotation.Cast;
 import org.bytedeco.javacpp.annotation.Namespace;
 import org.bytedeco.javacpp.annotation.Properties;
  // namespace functional
@@ -20,11 +21,9 @@ import org.bytedeco.javacpp.annotation.Properties;
 @Namespace("torch::nn") @Properties(inherit = org.bytedeco.libtorch.presets.libtorch.class)
 public class UnfoldOptions extends Pointer {
     static { Loader.load(); }
-    /** Pointer cast constructor. Invokes {@link Pointer#Pointer(Pointer)}. */
-    public UnfoldOptions(Pointer p) { super(p); }
 
-  public UnfoldOptions(@ByVal ExpandingArray2 kernel_size) { super((Pointer)null); allocate(kernel_size); }
-  private native void allocate(@ByVal ExpandingArray2 kernel_size);
+  public UnfoldOptions(@ByVal @Cast("torch::ExpandingArray<2>*") Pointer kernel_size) { super((Pointer)null); allocate(kernel_size); }
+  private native void allocate(@ByVal @Cast("torch::ExpandingArray<2>*") Pointer kernel_size);
 
   /** the size of the sliding blocks */
 

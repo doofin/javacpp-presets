@@ -5,6 +5,7 @@ package org.bytedeco.libtorch;
 import org.bytedeco.javacpp.Loader;
 import org.bytedeco.javacpp.Pointer;
 import org.bytedeco.javacpp.annotation.ByVal;
+import org.bytedeco.javacpp.annotation.Cast;
 import org.bytedeco.javacpp.annotation.Namespace;
 import org.bytedeco.javacpp.annotation.Properties;
 
@@ -20,11 +21,9 @@ import org.bytedeco.javacpp.annotation.Properties;
 @Namespace("torch::nn") @Properties(inherit = org.bytedeco.libtorch.presets.libtorch.class)
 public class ZeroPad2dOptions extends Pointer {
     static { Loader.load(); }
-    /** Pointer cast constructor. Invokes {@link Pointer#Pointer(Pointer)}. */
-    public ZeroPad2dOptions(Pointer p) { super(p); }
 
-  public ZeroPad2dOptions(@ByVal ExpandingArray4 padding) { super((Pointer)null); allocate(padding); }
-  private native void allocate(@ByVal ExpandingArray4 padding);
+  public ZeroPad2dOptions(@ByVal @Cast("torch::ExpandingArray<4>*") Pointer padding) { super((Pointer)null); allocate(padding); }
+  private native void allocate(@ByVal @Cast("torch::ExpandingArray<4>*") Pointer padding);
 
   /** The size of the padding.
    *  - If it is {@code int}, uses the same padding in all boundaries.

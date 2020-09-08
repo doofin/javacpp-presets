@@ -3,14 +3,10 @@
 package org.bytedeco.libtorch;
 
 import org.bytedeco.javacpp.Loader;
-import org.bytedeco.javacpp.LongPointer;
 import org.bytedeco.javacpp.Pointer;
-import org.bytedeco.javacpp.annotation.Cast;
+import org.bytedeco.javacpp.annotation.ByVal;
 import org.bytedeco.javacpp.annotation.Namespace;
 import org.bytedeco.javacpp.annotation.Properties;
-import org.bytedeco.javacpp.annotation.StdVector;
-
-import java.nio.LongBuffer;
 
 
 /** Options for {@code torch::nn::functional::layer_norm}.
@@ -26,12 +22,8 @@ public class LayerNormFuncOptions extends Pointer {
     /** Pointer cast constructor. Invokes {@link Pointer#Pointer(Pointer)}. */
     public LayerNormFuncOptions(Pointer p) { super(p); }
 
-  /* implicit */ public LayerNormFuncOptions(@Cast("int64_t*") @StdVector LongPointer normalized_shape) { super((Pointer)null); allocate(normalized_shape); }
-private native void allocate(@Cast("int64_t*") @StdVector LongPointer normalized_shape);
-public LayerNormFuncOptions(@Cast("int64_t*") @StdVector LongBuffer normalized_shape) { super((Pointer)null); allocate(normalized_shape); }
-private native void allocate(@Cast("int64_t*") @StdVector LongBuffer normalized_shape);
-public LayerNormFuncOptions(@Cast("int64_t*") @StdVector long[] normalized_shape) { super((Pointer)null); allocate(normalized_shape); }
-private native void allocate(@Cast("int64_t*") @StdVector long[] normalized_shape);
+  /* implicit */ public LayerNormFuncOptions(@ByVal LongVector normalized_shape) { super((Pointer)null); allocate(normalized_shape); }
+private native void allocate(@ByVal LongVector normalized_shape);
   /** input shape from an expected input. */
 
   /** a value added to the denominator for numerical stability. {@code }Default: 1e-5{@code }. */

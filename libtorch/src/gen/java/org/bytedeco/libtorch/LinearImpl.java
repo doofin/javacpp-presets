@@ -40,15 +40,15 @@ public class LinearImpl extends CloneableLinearImpl {
 
   /** Transforms the {@code input} tensor by multiplying with the {@code weight} and
    *  optionally adding the {@code bias}, if {@code with_bias} is true in the options. */
-  public native @ByVal @Cast("torch::Tensor*") Pointer forward(@Cast("const torch::Tensor*") @ByRef Pointer input);
+  public native @ByVal Tensor forward(@Const @ByRef Tensor input);
 
   /** The options used to configure this module. */
   public native @ByRef LinearOptions options(); public native LinearImpl options(LinearOptions setter);
 
   /** The learned weight. */
-  public native @ByRef @Cast("torch::Tensor*") Pointer weight(); public native LinearImpl weight(Pointer setter);
+  public native @ByRef Tensor weight(); public native LinearImpl weight(Tensor setter);
 
   /** The learned bias. If {@code bias} is false in the {@code options}, this tensor is
    *  undefined. */
-  public native @ByRef @Cast("torch::Tensor*") Pointer bias(); public native LinearImpl bias(Pointer setter);
+  public native @ByRef Tensor bias(); public native LinearImpl bias(Tensor setter);
 }

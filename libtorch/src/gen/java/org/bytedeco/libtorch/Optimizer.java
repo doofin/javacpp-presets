@@ -21,11 +21,11 @@ public class Optimizer extends Pointer {
 
   /** Adds the given param_group to the optimizer's param_group list. */
   /** A loss function closure, which is expected to return the loss value. */
-  public native @ByVal @Cast("torch::Tensor*") Pointer step(@ByVal(nullValue = "torch::optim::Optimizer::LossClosure(nullptr)") @Cast("torch::optim::Optimizer::LossClosure*") Pointer closure);
-  public native @ByVal @Cast("torch::Tensor*") Pointer step();
+  public native @ByVal Tensor step(@ByVal(nullValue = "torch::optim::Optimizer::LossClosure(nullptr)") @Cast("torch::optim::Optimizer::LossClosure*") Pointer closure);
+  public native @ByVal Tensor step();
 
   /** Adds the given vector of parameters to the optimizer's parameter list. */
-  public native void add_parameters(@Cast("torch::Tensor*") @StdVector Pointer parameters);
+  public native void add_parameters(@StdVector Tensor parameters);
 
   /** Zeros out the gradients of all parameters. */
   public native void zero_grad();
@@ -33,7 +33,7 @@ public class Optimizer extends Pointer {
   /** Provides a const reference to the parameters in the first param_group this optimizer holds. */
 
   /** Provides a reference to the parameters in the first param_group this optimizer holds. */
-  public native @Cast("torch::Tensor*") @StdVector @NoException Pointer parameters();
+  public native @StdVector @NoException Tensor parameters();
 
   /** Returns the number of parameters referenced by the optimizer. */
   public native @Cast("size_t") @NoException long size();

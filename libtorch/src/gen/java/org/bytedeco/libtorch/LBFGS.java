@@ -14,10 +14,10 @@ public class LBFGS extends Optimizer {
     public LBFGS(Pointer p) { super(p); }
 
    public LBFGS(
-          @Cast("torch::Tensor*") @StdVector Pointer params,
+          @StdVector Tensor params,
           @ByVal(nullValue = "torch::optim::LBFGSOptions({})") LBFGSOptions defaults) { super((Pointer)null); allocate(params, defaults); }
    private native void allocate(
-          @Cast("torch::Tensor*") @StdVector Pointer params,
+          @StdVector Tensor params,
           @ByVal(nullValue = "torch::optim::LBFGSOptions({})") LBFGSOptions defaults);
   public native void save(@ByRef OutputArchive archive);
   public native void load(@ByRef InputArchive archive);

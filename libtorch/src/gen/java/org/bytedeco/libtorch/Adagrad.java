@@ -15,13 +15,13 @@ public class Adagrad extends Optimizer {
 
 
   public Adagrad(
-        @Cast("torch::Tensor*") @StdVector Pointer params,
+        @StdVector Tensor params,
         @ByVal(nullValue = "torch::optim::AdagradOptions({})") AdagradOptions defaults) { super((Pointer)null); allocate(params, defaults); }
   private native void allocate(
-        @Cast("torch::Tensor*") @StdVector Pointer params,
+        @StdVector Tensor params,
         @ByVal(nullValue = "torch::optim::AdagradOptions({})") AdagradOptions defaults);
 
-  public native @ByVal @Cast("torch::Tensor*") Pointer step();
+  public native @ByVal Tensor step();
   public native void save(@ByRef OutputArchive archive);
   public native void load(@ByRef InputArchive archive);
 }

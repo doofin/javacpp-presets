@@ -41,15 +41,15 @@ public class BilinearImpl extends CloneableBilinearImpl {
   /** Applies a bilinear transform on the {@code input1} and {@code input2} tensor by multiplying 
    *  with the {@code weight} and optionally adding the {@code bias}, if {@code with_bias} 
    *  is true in the options. */
-  public native @ByVal @Cast("torch::Tensor*") Pointer forward(@Cast("const torch::Tensor*") @ByRef Pointer input1, @Cast("const torch::Tensor*") @ByRef Pointer input2);
+  public native @ByVal Tensor forward(@Const @ByRef Tensor input1, @Const @ByRef Tensor input2);
 
   /** The options used to configure this module. */
   public native @ByRef BilinearOptions options(); public native BilinearImpl options(BilinearOptions setter);
 
   /** The learned weight. */
-  public native @ByRef @Cast("torch::Tensor*") Pointer weight(); public native BilinearImpl weight(Pointer setter);
+  public native @ByRef Tensor weight(); public native BilinearImpl weight(Tensor setter);
 
   /** The learned bias. If {@code with_bias} is false in the {@code options}, this tensor is
    *  undefined. */
-  public native @ByRef @Cast("torch::Tensor*") Pointer bias(); public native BilinearImpl bias(Pointer setter);
+  public native @ByRef Tensor bias(); public native BilinearImpl bias(Tensor setter);
 }

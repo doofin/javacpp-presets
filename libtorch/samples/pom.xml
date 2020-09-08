@@ -5,6 +5,8 @@
     <version>1.5.4-SNAPSHOT</version>
     <properties>
         <exec.mainClass>LoadModel</exec.mainClass>
+        <maven.compiler.target>1.7</maven.compiler.target>
+        <maven.compiler.source>1.7</maven.compiler.source>
     </properties>
     <dependencies>
         <dependency>
@@ -12,6 +14,13 @@
             <artifactId>libtorch</artifactId>
             <version>1.6.0-1.5.4-SNAPSHOT</version>
         </dependency>
+        <dependency>
+            <groupId>org.bytedeco</groupId>
+            <artifactId>libtorch</artifactId>
+            <version>1.6.0-1.5.4-SNAPSHOT</version>
+            <classifier>macosx-x86_64</classifier>
+        </dependency>
+
     </dependencies>
     <build>
         <sourceDirectory>.</sourceDirectory>

@@ -200,25 +200,19 @@ public class Module extends Pointer {
 
   /** Returns the parameters of this {@code Module} and if {@code recurse} is true, also
    *  recursively of every submodule. */
-  public native @Cast("torch::Tensor*") @StdVector Pointer parameters(@Cast("bool") boolean recurse/*=true*/);
-  public native @Cast("torch::Tensor*") @StdVector Pointer parameters();
+  public native @StdVector Tensor parameters(@Cast("bool") boolean recurse/*=true*/);
+  public native @StdVector Tensor parameters();
 
   /** Returns an {@code OrderedDict} with the parameters of this {@code Module} along with
    *  their keys, and if {@code recurse} is true also recursively of every submodule. */
-  public native @ByVal @Cast("torch::OrderedDict<std::string,torch::Tensor>*") Pointer named_parameters(@Cast("bool") boolean recurse/*=true*/);
-  public native @ByVal @Cast("torch::OrderedDict<std::string,torch::Tensor>*") Pointer named_parameters();
 
   /** Returns the buffers of this {@code Module} and if {@code recurse} is true, also
    *  recursively of every submodule. */
-  public native @Cast("torch::Tensor*") @StdVector Pointer buffers(@Cast("bool") boolean recurse/*=true*/);
-  public native @Cast("torch::Tensor*") @StdVector Pointer buffers();
+  public native @StdVector Tensor buffers(@Cast("bool") boolean recurse/*=true*/);
+  public native @StdVector Tensor buffers();
 
   /** Returns an {@code OrderedDict} with the buffers of this {@code Module} along with
    *  their keys, and if {@code recurse} is true also recursively of every submodule. */
-  
-  ///
-  public native @ByVal @Cast("torch::OrderedDict<std::string,torch::Tensor>*") Pointer named_buffers(@Cast("bool") boolean recurse/*=true*/);
-  public native @ByVal @Cast("torch::OrderedDict<std::string,torch::Tensor>*") Pointer named_buffers();
 
   /** Returns the submodules of this {@code Module} (the entire submodule hierarchy)
    *  and if {@code include_self} is true, also inserts a {@code shared_ptr} to this module
@@ -451,20 +445,20 @@ public class Module extends Pointer {
   ///
   ///
   ///
-  public native @Cast("torch::Tensor*") @ByRef Pointer register_parameter(
+  public native @ByRef Tensor register_parameter(
         @StdString BytePointer name,
-        @ByVal @Cast("torch::Tensor*") Pointer tensor,
+        @ByVal Tensor tensor,
         @Cast("bool") boolean requires_grad/*=true*/);
-  public native @Cast("torch::Tensor*") @ByRef Pointer register_parameter(
+  public native @ByRef Tensor register_parameter(
         @StdString BytePointer name,
-        @ByVal @Cast("torch::Tensor*") Pointer tensor);
-  public native @Cast("torch::Tensor*") @ByRef Pointer register_parameter(
+        @ByVal Tensor tensor);
+  public native @ByRef Tensor register_parameter(
         @StdString String name,
-        @ByVal @Cast("torch::Tensor*") Pointer tensor,
+        @ByVal Tensor tensor,
         @Cast("bool") boolean requires_grad/*=true*/);
-  public native @Cast("torch::Tensor*") @ByRef Pointer register_parameter(
+  public native @ByRef Tensor register_parameter(
         @StdString String name,
-        @ByVal @Cast("torch::Tensor*") Pointer tensor);
+        @ByVal Tensor tensor);
 
   /** Registers a buffer with this {@code Module}.
    * 
@@ -483,8 +477,8 @@ public class Module extends Pointer {
   ///
   ///
   ///
-  public native @Cast("torch::Tensor*") @ByRef Pointer register_buffer(@StdString BytePointer name, @ByVal @Cast("torch::Tensor*") Pointer tensor);
-  public native @Cast("torch::Tensor*") @ByRef Pointer register_buffer(@StdString String name, @ByVal @Cast("torch::Tensor*") Pointer tensor);
+  public native @ByRef Tensor register_buffer(@StdString BytePointer name, @ByVal Tensor tensor);
+  public native @ByRef Tensor register_buffer(@StdString String name, @ByVal Tensor tensor);
 
   /** Registers a submodule with this {@code Module}.
    * 

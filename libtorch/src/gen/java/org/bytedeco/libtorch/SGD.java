@@ -14,12 +14,12 @@ public class SGD extends Optimizer {
     public SGD(Pointer p) { super(p); }
 
 
-  public SGD(@Cast("torch::Tensor*") @StdVector Pointer params,
+  public SGD(@StdVector Tensor params,
         @ByVal SGDOptions defaults) { super((Pointer)null); allocate(params, defaults); }
-  private native void allocate(@Cast("torch::Tensor*") @StdVector Pointer params,
+  private native void allocate(@StdVector Tensor params,
         @ByVal SGDOptions defaults);
 
-  public native @ByVal @Cast("torch::Tensor*") Pointer step();
+  public native @ByVal Tensor step();
 
   public native void save(@ByRef OutputArchive archive);
   public native void load(@ByRef InputArchive archive);
