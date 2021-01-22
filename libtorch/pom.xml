@@ -6,7 +6,7 @@
   <parent>
     <groupId>org.bytedeco</groupId>
     <artifactId>javacpp-presets</artifactId>
-    <version>1.5.4-SNAPSHOT</version>
+    <version>1.5.4</version>
   </parent>
 
   <groupId>org.bytedeco</groupId>
@@ -26,9 +26,13 @@
       <plugin>
         <artifactId>maven-resources-plugin</artifactId>
       </plugin>
-      <plugin>
+    <plugin>    
         <artifactId>maven-compiler-plugin</artifactId>
-      </plugin>
+        <configuration>
+            <source>1.8</source>
+            <target>1.8</target>
+        </configuration>
+    </plugin>
       <plugin>
         <groupId>org.bytedeco</groupId>
         <artifactId>javacpp</artifactId>
